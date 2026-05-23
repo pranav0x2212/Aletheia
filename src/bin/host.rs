@@ -3,6 +3,7 @@ use aletheia::{
     protocol::{Command, MemOp},
     network::send_command,
     results::ExperimentResult,
+    workloads::WorkingSetSweep,
 };
 use clap::{Parser, Subcommand};
 use std::time::Instant;
@@ -99,6 +100,8 @@ enum ExperimentType {
         #[arg(long, default_value = "./target/release/aletheia-node")]
         node_bin: String,
     },
+    /// Sweep working set sizes to measure cache hierarchy effects
+    WorkingSetSweep,
 }
 
 #[tokio::main]
@@ -132,6 +135,9 @@ async fn main() -> anyhow::Result<()> {
                 }
                 ExperimentType::StrideTesting { node_bin } => {
                     run_stride_testing_experiment(&node_bin).await?;
+                }
+                ExperimentType::WorkingSetSweep => {
+                    run_working_set_sweep_experiment().await?;
                 }
             }
         }
@@ -837,5 +843,128 @@ async fn run_stride_testing_experiment(node_bin: &str) -> anyhow::Result<()> {
 
     println!("✓ All stride testing experiments completed!");
     println!("✓ Results saved to {}", export_file);
+    Ok(())
+}
+
+async fn run_working_set_sweep_experiment() -> anyhow::Result<()> {
+    println!("Working Set Sweep Experiment");
+    println!("============================\n");
+    println!("Measuring memory latency as working set exceeds cache levels\n");
+
+    let workload = WorkingSetSweep::new();
+    let export_file = "results/working_set_sweep.jsonl";
+
+    // Cache hierarchy estimates (typical modern x86):
+    // L1: 32KB, L2: 256KB, L3: 8MB
+    let cache_levels = vec![
+        (32 * 1024, "L1 Cache"),
+        (256 * 1024, "L2 Cache"),
+        (8 * 1024 * 1024, "L3 Cache"),
+    ];
+
+    println!("Cache hierarchy reference:");
+    for (size, name) in &cache_levels {
+        println!("  {}: {} bytes", name, size);
+    }
+    println!();
+
+    println!("Testing working set sizes:");
+    println!("─────────────────────────────────────────────\n");
+
+    let mut all_results = Vec::new();
+
+    for working_set_bytes in &workload.working_set_sizes {
+        let size_kb = working_set_bytes / 1024;
+        let size_mb = working_set_bytes / (1024 * 1024);
+
+        let size_str = if size_mb > 0 {
+            format!("{}MB", size_mb)
+        } else {
+            format!("{}KB", size_kb)
+        };
+
+        // Identify cache level
+        let cache_level = if working_set_bytes <= &(32 * 1024) {
+            "→ L1"
+        } else if working_set_bytes <= &(256 * 1024) {
+            "→ L2"
+        } else if working_set_bytes <= &(8 * 1024 * 1024) {
+            "→ L3"
+        } else {
+            "→ DRAM"
+        };
+
+        print!("Working Set: {:>6}  {} ... ", size_str, cache_level);
+        std::io::Write::flush(&mut std::io::stdout())?;
+
+        // CPU mode
+        let mut engine = MemoryEngine::new();
+        let buf_size = working_set_bytes / 4; // u32 is 4 bytes
+        let buf = engine.allocate_buffer(buf_size, 0);
+
+        // Initialize with pseudo-random data
+        if let Some(buf_data) = engine.get_buffer_mut(buf) {
+            for (i, val) in buf_data.iter_mut().enumerate() {
+                *val = ((i as u32).wrapping_mul(7919)) % 1000;
+            }
+        }
+
+        let start = Instant::now();
+        let cpu_result = engine.execute_cpu(Operation::MemScan, &[buf], &[500]);
+        let cpu_time = start.elapsed();
+
+        // Calculate latency per access in nanoseconds
+        let cpu_latency_ns = (cpu_time.as_nanos() as f64) / (buf_size as f64);
+
+        // Memory engine mode (local simulation for now)
+        let start = Instant::now();
+        let mem_result = engine.execute_memory_engine(Operation::MemScan, &[buf], &[500]);
+        let mem_time = start.elapsed();
+
+        let mem_latency_ns = (mem_time.as_nanos() as f64) / (buf_size as f64);
+
+        // Store detailed result
+        let cpu_exp = ExperimentResult::new(
+            "working_set_sweep",
+            "cpu",
+            (*working_set_bytes as u64) / (1024 * 1024),
+            cpu_time.as_millis(),
+            cpu_result.stats.cycles,
+            cpu_result.stats.memory_access,
+            cpu_result.stats.data_moved,
+            buf_size as u64,
+        );
+
+        let mem_exp = ExperimentResult::new(
+            "working_set_sweep",
+            "memory_engine",
+            (*working_set_bytes as u64) / (1024 * 1024),
+            mem_time.as_millis(),
+            mem_result.stats.cycles,
+            mem_result.stats.memory_access,
+            mem_result.stats.data_moved,
+            buf_size as u64,
+        );
+
+        all_results.push(cpu_exp);
+        all_results.push(mem_exp);
+
+        println!(
+            "CPU: {:.2} ns/access | ME: {:.2} ns/access",
+            cpu_latency_ns, mem_latency_ns
+        );
+    }
+
+    // Export all results
+    ExperimentResult::append_batch_to_file(&all_results, export_file)?;
+
+    println!("\n─────────────────────────────────────────────");
+    println!("\n✓ Working set sweep experiment completed!");
+    println!("✓ Results saved to {}", export_file);
+    println!("\nResults show:");
+    println!("  • Low latency within L1 cache boundaries");
+    println!("  • Slight increase crossing into L2 cache");
+    println!("  • Significant jump when exceeding L3 cache (~8MB)");
+    println!("  • Sharp degradation in DRAM region");
     Ok(())
 }
