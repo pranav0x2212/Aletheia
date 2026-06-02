@@ -3,6 +3,7 @@ use aletheia::{
     protocol::{Command, MemOp},
     network::send_command,
     results::ExperimentResult,
+    workloads::WorkingSetSweep,
 };
 use clap::{Parser, Subcommand};
 use std::time::Instant;
@@ -99,6 +100,12 @@ enum ExperimentType {
         #[arg(long, default_value = "./target/release/aletheia-node")]
         node_bin: String,
     },
+    /// Sweep working set sizes to measure cache hierarchy effects
+    WorkingSetSweep {
+        /// Measurement mode: "sequential" (old scan-based) or "pointer" (new pointer-chase)
+        #[arg(long, default_value = "pointer")]
+        mode: String,
+    },
 }
 
 #[tokio::main]
@@ -132,6 +139,9 @@ async fn main() -> anyhow::Result<()> {
                 }
                 ExperimentType::StrideTesting { node_bin } => {
                     run_stride_testing_experiment(&node_bin).await?;
+                }
+                ExperimentType::WorkingSetSweep { mode } => {
+                    run_working_set_sweep_experiment(&mode).await?;
                 }
             }
         }
@@ -203,10 +213,11 @@ async fn run_scan(
     // Export results if requested
     if let Some(path) = export_path {
         let operations = 256 * 1024 * 1024 / 4;
+        let working_set_bytes = 256 * 1024 * 1024;
         let cpu_exp = ExperimentResult::new(
             "scan",
             "cpu",
-            256,
+            working_set_bytes,
             cpu_time.as_millis(),
             cpu_result.stats.cycles,
             cpu_result.stats.memory_access,
@@ -217,7 +228,7 @@ async fn run_scan(
         let mem_exp = ExperimentResult::new(
             "scan",
             "memory_engine",
-            256,
+            working_set_bytes,
             mem_time.as_millis(),
             mem_cycles,
             response.data.memory_access,
@@ -282,10 +293,11 @@ async fn run_vec_add(
     // Export results if requested
     if let Some(path) = export_path {
         let operations = 256 * 1024 * 1024 / 4;
+        let working_set_bytes = 256 * 1024 * 1024;
         let cpu_exp = ExperimentResult::new(
             "vector_add",
             "cpu",
-            256,
+            working_set_bytes,
             cpu_time.as_millis(),
             cpu_result.stats.cycles,
             cpu_result.stats.memory_access,
@@ -296,7 +308,7 @@ async fn run_vec_add(
         let mem_exp = ExperimentResult::new(
             "vector_add",
             "memory_engine",
-            256,
+            working_set_bytes,
             mem_time.as_millis(),
             mem_cycles,
             response.data.memory_access,
@@ -450,10 +462,11 @@ async fn run_scan_experiment(
     let cpu_time = start.elapsed();
 
     let operations = dataset_mb as u64 * 1024 * 1024 / 4;
+    let working_set_bytes = (dataset_mb as u64) * 1024 * 1024;
     results.push(ExperimentResult::new(
         "scan",
         "cpu",
-        dataset_mb as u64,
+        working_set_bytes,
         cpu_time.as_millis(),
         cpu_result.stats.cycles,
         cpu_result.stats.memory_access,
@@ -478,10 +491,11 @@ async fn run_scan_experiment(
             let estimated_cpu_freq_hz = 4_000_000_000.0;
             let mem_cycles = (mem_time.as_secs_f64() * estimated_cpu_freq_hz) as u64;
             let operations = dataset_mb as u64 * 1024 * 1024 / 4;
+            let working_set_bytes = (dataset_mb as u64) * 1024 * 1024;
             results.push(ExperimentResult::new(
                 "scan",
                 "memory_engine",
-                dataset_mb as u64,
+                working_set_bytes,
                 mem_time.as_millis(),
                 mem_cycles,
                 response.data.memory_access,
@@ -514,10 +528,11 @@ async fn run_vecadd_experiment(
     let cpu_time = start.elapsed();
 
     let operations = dataset_mb as u64 * 1024 * 1024 / 4;
+    let working_set_bytes = (dataset_mb as u64) * 1024 * 1024;
     results.push(ExperimentResult::new(
         "vector_add",
         "cpu",
-        dataset_mb as u64,
+        working_set_bytes,
         cpu_time.as_millis(),
         cpu_result.stats.cycles,
         cpu_result.stats.memory_access,
@@ -542,10 +557,11 @@ async fn run_vecadd_experiment(
             let estimated_cpu_freq_hz = 4_000_000_000.0;
             let mem_cycles = (mem_time.as_secs_f64() * estimated_cpu_freq_hz) as u64;
             let operations = dataset_mb as u64 * 1024 * 1024 / 4;
+            let working_set_bytes = (dataset_mb as u64) * 1024 * 1024;
             results.push(ExperimentResult::new(
                 "vector_add",
                 "memory_engine",
-                dataset_mb as u64,
+                working_set_bytes,
                 mem_time.as_millis(),
                 mem_cycles,
                 response.data.memory_access,
@@ -592,10 +608,11 @@ async fn run_stride_scan(
     println!("  Cycles: {}", cpu_result.stats.cycles);
 
     let operations = dataset_size_mb as u64 * 1024 * 1024 / 4;
+    let working_set_bytes = (dataset_size_mb as u64) * 1024 * 1024;
     results.push(ExperimentResult::with_stride(
         "stride_scan",
         "cpu",
-        dataset_size_mb as u64,
+        working_set_bytes,
         cpu_time.as_millis(),
         cpu_result.stats.cycles,
         cpu_result.stats.memory_access,
@@ -629,10 +646,11 @@ async fn run_stride_scan(
     println!("  Cycles: {}", mem_cycles);
 
     let operations = dataset_size_mb as u64 * 1024 * 1024 / 4;
+    let working_set_bytes = (dataset_size_mb as u64) * 1024 * 1024;
     results.push(ExperimentResult::with_stride(
         "stride_scan",
         "memory_engine",
-        dataset_size_mb as u64,
+        working_set_bytes,
         mem_time.as_millis(),
         mem_cycles,
         response.data.memory_access,
@@ -721,10 +739,11 @@ async fn run_pointer_chase(
     // Export results if requested
     if let Some(path) = export_path {
         let operations = iterations as u64;
+        let working_set_bytes = 256 * 1024 * 1024;
         let cpu_exp = ExperimentResult::new(
             "pointer_chase",
             "cpu",
-            256,
+            working_set_bytes,
             cpu_time.as_millis(),
             cpu_result.stats.cycles,
             cpu_result.stats.memory_access,
@@ -735,7 +754,7 @@ async fn run_pointer_chase(
         let mem_exp = ExperimentResult::new(
             "pointer_chase",
             "memory_engine",
-            256,
+            working_set_bytes,
             mem_time.as_millis(),
             mem_cycles,
             response.data.memory_access,
@@ -811,10 +830,11 @@ async fn run_stride_testing_experiment(node_bin: &str) -> anyhow::Result<()> {
                 let estimated_cpu_freq_hz = 4_000_000_000.0;
                 let mem_cycles = (mem_time.as_secs_f64() * estimated_cpu_freq_hz) as u64;
                 let operations = 256 * 1024 * 1024 / 4;
+                let working_set_bytes = 256 * 1024 * 1024;
                 let mem_exp = ExperimentResult::with_stride(
                     "stride_scan",
                     "memory_engine",
-                    256,
+                    working_set_bytes,
                     mem_time.as_millis(),
                     mem_cycles,
                     response.data.memory_access,
@@ -837,5 +857,271 @@ async fn run_stride_testing_experiment(node_bin: &str) -> anyhow::Result<()> {
 
     println!("✓ All stride testing experiments completed!");
     println!("✓ Results saved to {}", export_file);
+    Ok(())
+}
+
+async fn run_working_set_sweep_experiment(mode: &str) -> anyhow::Result<()> {
+    let is_pointer = mode == "pointer";
+    let is_sequential = mode == "sequential";
+    
+    if !is_pointer && !is_sequential {
+        anyhow::bail!("Invalid mode: '{}'. Use 'pointer' or 'sequential'", mode);
+    }
+
+    let title = if is_pointer {
+        "Working Set Sweep Experiment (Pointer Chasing)"
+    } else {
+        "Working Set Sweep Experiment (Sequential Scan)"
+    };
+    
+    println!("{}", title);
+    println!("{}\n", "=".repeat(title.len()));
+    
+    if is_pointer {
+        println!("Measuring memory latency by defeating prefetching\n");
+        println!("Method: Randomized dependent pointer chasing");
+        println!("        (each access creates memory dependency)\n");
+    } else {
+        println!("Measuring memory latency with hardware prefetching enabled\n");
+        println!("Method: Sequential memory scan");
+        println!("        (allows prefetching and spatial locality optimization)\n");
+    }
+
+    let workload = WorkingSetSweep::new();
+    let export_file = if is_pointer {
+        "results/working_set_sweep_pointer.jsonl"
+    } else {
+        "results/working_set_sweep_sequential.jsonl"
+    };
+
+    // Cache hierarchy estimates (typical modern x86):
+    // L1: 32KB, L2: 256KB, L3: 8MB
+    println!("Cache hierarchy reference:");
+    println!("  L1 Cache:  32KB");
+    println!("  L2 Cache:  256KB");
+    println!("  L3 Cache:  8MB");
+    println!("  DRAM:      system dependent\n");
+
+    println!("Experiment parameters:");
+    println!("  Measured iterations:  {}", workload.iterations);
+    println!("  Warmup iterations:    {}", workload.warmup_iterations);
+    println!("  Total iterations:     {}\n", workload.iterations + workload.warmup_iterations);
+
+    println!("Testing working set sizes:");
+    println!("─────────────────────────────────────────────────────────\n");
+
+    let mut all_results = Vec::new();
+
+    for working_set_bytes in &workload.working_set_sizes {
+        let size_kb = working_set_bytes / 1024;
+        let size_mb = working_set_bytes / (1024 * 1024);
+
+        let size_str = if size_mb > 0 {
+            format!("{}MB", size_mb)
+        } else {
+            format!("{}KB", size_kb)
+        };
+
+        // Identify cache level
+        let cache_level = if working_set_bytes <= &(32 * 1024) {
+            "→ L1"
+        } else if working_set_bytes <= &(256 * 1024) {
+            "→ L2"
+        } else if working_set_bytes <= &(8 * 1024 * 1024) {
+            "→ L3"
+        } else {
+            "→ DRAM"
+        };
+
+        print!("Working Set: {:>6}  {} ", size_str, cache_level);
+        std::io::Write::flush(&mut std::io::stdout()).ok();
+
+        if is_pointer {
+            // ===== POINTER CHASING MODE =====
+            
+            // CPU mode with pointer chasing
+            let mut engine = MemoryEngine::new();
+            let buf_size = working_set_bytes / 4; // u32 is 4 bytes
+            let buf = engine.allocate_buffer(buf_size, 0);
+
+            // Initialize buffer as randomized pointer chain
+            let pointer_chain = WorkingSetSweep::generate_pointer_chain(buf_size);
+            if let Some(buf_data) = engine.get_buffer_mut(buf) {
+                for (i, &ptr) in pointer_chain.iter().enumerate() {
+                    buf_data[i] = ptr;
+                }
+            }
+
+            // Warmup (don't count toward latency)
+            let _warmup = engine.execute_cpu(
+                Operation::MemPointerChase,
+                &[buf],
+                &[workload.warmup_iterations as u32],
+            );
+
+            // Measured run
+            let start = Instant::now();
+            let cpu_result =
+                engine.execute_cpu(Operation::MemPointerChase, &[buf], &[workload.iterations as u32]);
+            let cpu_time = start.elapsed();
+            let cpu_latency_ns = WorkingSetSweep::calculate_latency_ns(cpu_time.as_nanos(), workload.iterations);
+
+            // Memory engine mode with pointer chasing
+            let mut engine = MemoryEngine::new();
+            let buf = engine.allocate_buffer(buf_size, 0);
+
+            // Initialize buffer with same pointer chain
+            if let Some(buf_data) = engine.get_buffer_mut(buf) {
+                for (i, &ptr) in pointer_chain.iter().enumerate() {
+                    buf_data[i] = ptr;
+                }
+            }
+
+            // Warmup (don't count toward latency)
+            let _warmup = engine.execute_memory_engine(
+                Operation::MemPointerChase,
+                &[buf],
+                &[workload.warmup_iterations as u32],
+            );
+
+            // Measured run
+            let start = Instant::now();
+            let mem_result = engine.execute_memory_engine(
+                Operation::MemPointerChase,
+                &[buf],
+                &[workload.iterations as u32],
+            );
+            let mem_time = start.elapsed();
+            let mem_latency_ns = WorkingSetSweep::calculate_latency_ns(mem_time.as_nanos(), workload.iterations);
+
+            print!("CPU: {:.2} ns/access | ME: {:.2} ns/access\n", cpu_latency_ns, mem_latency_ns);
+
+            // Store results with exact working set size in bytes (no rounding)
+            let cpu_exp = ExperimentResult::new(
+                "working_set_sweep",
+                "cpu",
+                *working_set_bytes as u64,
+                cpu_time.as_millis(),
+                cpu_result.stats.cycles,
+                cpu_result.stats.memory_access,
+                cpu_result.stats.data_moved,
+                workload.iterations as u64,
+            ).with_latency(cpu_latency_ns);
+
+            let mem_exp = ExperimentResult::new(
+                "working_set_sweep",
+                "memory_engine",
+                *working_set_bytes as u64,
+                mem_time.as_millis(),
+                mem_result.stats.cycles,
+                mem_result.stats.memory_access,
+                mem_result.stats.data_moved,
+                workload.iterations as u64,
+            ).with_latency(mem_latency_ns);
+
+            all_results.push(cpu_exp);
+            all_results.push(mem_exp);
+        } else {
+            // ===== SEQUENTIAL SCAN MODE =======
+            
+            // CPU mode with sequential scan
+            let mut engine = MemoryEngine::new();
+            let buf_size = working_set_bytes / 4; // u32 is 4 bytes
+            let buf = engine.allocate_buffer(buf_size, 0);
+
+            // Initialize buffer with simple values (sequential access pattern will be used)
+            if let Some(buf_data) = engine.get_buffer_mut(buf) {
+                for (i, val) in buf_data.iter_mut().enumerate() {
+                    *val = ((i as u32).wrapping_mul(7919)) % 1000;
+                }
+            }
+
+            // Warmup (don't count toward latency)
+            let _warmup = engine.execute_cpu(
+                Operation::MemScan,
+                &[buf],
+                &[500], // threshold for scan
+            );
+
+            // Measured run
+            let start = Instant::now();
+            let cpu_result = engine.execute_cpu(Operation::MemScan, &[buf], &[500]);
+            let cpu_time = start.elapsed();
+            let cpu_latency_ns = WorkingSetSweep::calculate_latency_ns(cpu_time.as_nanos(), workload.iterations);
+
+            // Memory engine mode with sequential scan
+            let mut engine = MemoryEngine::new();
+            let buf = engine.allocate_buffer(buf_size, 0);
+
+            // Initialize buffer with simple values
+            if let Some(buf_data) = engine.get_buffer_mut(buf) {
+                for (i, val) in buf_data.iter_mut().enumerate() {
+                    *val = ((i as u32).wrapping_mul(7919)) % 1000;
+                }
+            }
+
+            // Warmup (don't count toward latency)
+            let _warmup = engine.execute_memory_engine(Operation::MemScan, &[buf], &[500]);
+
+            // Measured run
+            let start = Instant::now();
+            let mem_result = engine.execute_memory_engine(Operation::MemScan, &[buf], &[500]);
+            let mem_time = start.elapsed();
+            let mem_latency_ns = WorkingSetSweep::calculate_latency_ns(mem_time.as_nanos(), workload.iterations);
+
+            print!("CPU: {:.2} ns/access | ME: {:.2} ns/access\n", cpu_latency_ns, mem_latency_ns);
+
+            // Store results with exact working set size in bytes (no rounding)
+            let cpu_exp = ExperimentResult::new(
+                "working_set_sweep",
+                "cpu",
+                *working_set_bytes as u64,
+                cpu_time.as_millis(),
+                cpu_result.stats.cycles,
+                cpu_result.stats.memory_access,
+                cpu_result.stats.data_moved,
+                workload.iterations as u64,
+            ).with_latency(cpu_latency_ns);
+
+            let mem_exp = ExperimentResult::new(
+                "working_set_sweep",
+                "memory_engine",
+                *working_set_bytes as u64,
+                mem_time.as_millis(),
+                mem_result.stats.cycles,
+                mem_result.stats.memory_access,
+                mem_result.stats.data_moved,
+                workload.iterations as u64,
+            ).with_latency(mem_latency_ns);
+
+            all_results.push(cpu_exp);
+            all_results.push(mem_exp);
+        }
+    }
+
+    // Export all results
+    ExperimentResult::append_batch_to_file(&all_results, export_file)?;
+
+    println!("\n─────────────────────────────────────────────────────────");
+    println!("\n✓ Working set sweep experiment completed!");
+    println!("✓ Results saved to {}", export_file);
+    
+    if is_pointer {
+        println!("\nExpected results (pointer chasing):");
+        println!("  • Low latency within L1 cache (~4 ns/access)");
+        println!("  • Slight increase in L2 cache (~10-12 ns/access)");
+        println!("  • Jump at L3 cache boundary (~40-50 ns/access)");
+        println!("  • Sharp degradation in DRAM (~100-300 ns/access)");
+        println!("\nNote: Pointer chasing prevents prefetching, revealing true");
+        println!("      memory hierarchy latencies without optimization.");
+    } else {
+        println!("\nExpected results (sequential scan):");
+        println!("  • Much lower latencies due to prefetching (~2-5 ns/access typical)");
+        println!("  • More gradual transitions between cache levels");
+        println!("  • Spatial locality hidden by hardware prefetching");
+        println!("\nNote: Sequential access enables hardware prefetching and");
+        println!("      bandwidth optimization, masking true latency.");
+    }
+    
     Ok(())
 }

@@ -19,6 +19,7 @@
 #   vecadd             - Run vector-add workload on host
 #   stride             - Run stride-scan memory access pattern test
 #   pointer            - Run pointer-chase latency measurement workload
+#   wsweep             - Run working-set-sweep cache hierarchy measurement
 #   benchmark          - Run full benchmark suite
 #
 # Visualization:
@@ -27,7 +28,7 @@
 #
 # =============================================================================
 
-.PHONY: help build release check test clean dev host node scan vecadd stride pointer benchmark plot-scaling plot-stride
+.PHONY: help build release check test clean dev host node scan vecadd stride pointer wsweep benchmark plot-scaling plot-stride
 
 # Default target
 help:
@@ -50,6 +51,7 @@ help:
 	@echo "  make vecadd        - Run vector-add workload"
 	@echo "  make stride        - Run stride-scan experiment"
 	@echo "  make pointer       - Run pointer-chase workload"
+	@echo "  make wsweep        - Run working-set-sweep cache measurement"
 	@echo "  make benchmark     - Run full benchmark suite"
 	@echo ""
 	@echo "Visualization:"
@@ -93,6 +95,9 @@ stride:
 
 pointer:
 	cargo run --bin aletheia-host --release -- pointer-chase
+
+wsweep:
+	cargo run --bin aletheia-host --release -- experiment working-set-sweep
 
 benchmark:
 	cargo run --bin aletheia-host --release -- benchmark
