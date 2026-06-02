@@ -8,7 +8,7 @@ use anyhow::Result;
 pub struct ExperimentResult {
     pub experiment: String,
     pub mode: String,            // "cpu" or "memory_engine"
-    pub dataset_size_mb: u64,
+    pub working_set_bytes: u64,
     pub runtime_ms: u128,
     pub cycles: u64,
     pub memory_access_bytes: u64,
@@ -17,13 +17,15 @@ pub struct ExperimentResult {
     pub operational_intensity: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stride: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latency_ns_per_access: Option<f64>,
 }
 
 impl ExperimentResult {
     pub fn new(
         experiment: &str,
         mode: &str,
-        dataset_size_mb: u64,
+        working_set_bytes: u64,
         runtime_ms: u128,
         cycles: u64,
         memory_access_bytes: u64,
@@ -39,7 +41,7 @@ impl ExperimentResult {
         ExperimentResult {
             experiment: experiment.to_string(),
             mode: mode.to_string(),
-            dataset_size_mb,
+            working_set_bytes,
             runtime_ms,
             cycles,
             memory_access_bytes,
@@ -47,13 +49,14 @@ impl ExperimentResult {
             operations,
             operational_intensity,
             stride: None,
+            latency_ns_per_access: None,
         }
     }
 
     pub fn with_stride(
         experiment: &str,
         mode: &str,
-        dataset_size_mb: u64,
+        working_set_bytes: u64,
         runtime_ms: u128,
         cycles: u64,
         memory_access_bytes: u64,
@@ -70,7 +73,7 @@ impl ExperimentResult {
         ExperimentResult {
             experiment: experiment.to_string(),
             mode: mode.to_string(),
-            dataset_size_mb,
+            working_set_bytes,
             runtime_ms,
             cycles,
             memory_access_bytes,
@@ -78,7 +81,14 @@ impl ExperimentResult {
             operations,
             operational_intensity,
             stride: Some(stride),
+            latency_ns_per_access: None,
         }
+    }
+
+    /// Helper method to set latency_ns_per_access (for working-set sweep results)
+    pub fn with_latency(mut self, latency_ns: f64) -> Self {
+        self.latency_ns_per_access = Some(latency_ns);
+        self
     }
 
     /// Export result as a single line of JSONL
@@ -119,7 +129,8 @@ mod tests {
     #[test]
     fn test_experiment_result_serialization() {
         let operations = 256 * 1024 * 1024 / 4;
-        let result = ExperimentResult::new("scan", "cpu", 256, 92, 121241, 268000000, 133000000, operations);
+        let working_set_bytes = 256 * 1024 * 1024;
+        let result = ExperimentResult::new("scan", "cpu", working_set_bytes, 92, 121241, 268000000, 133000000, operations);
         let json = result.to_json_line().unwrap();
         assert!(json.contains("\"experiment\":\"scan\""));
         assert!(json.contains("\"mode\":\"cpu\""));
