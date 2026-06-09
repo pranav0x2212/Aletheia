@@ -4,6 +4,7 @@ Cargo.lock
 
 # results / generated data
 results/
+*.txt
 
 # Python viz
 viz/__pycache__/

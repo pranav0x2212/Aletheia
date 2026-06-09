@@ -7,6 +7,7 @@ pub enum Operation {
     MemScan,
     MemStrideScan,
     MemPointerChase,
+    MemRandomAccess,
 }
 
 impl Operation {
@@ -19,6 +20,7 @@ impl Operation {
             Operation::MemScan => "MEM_SCAN",
             Operation::MemStrideScan => "MEM_STRIDE_SCAN",
             Operation::MemPointerChase => "MEM_POINTER_CHASE",
+            Operation::MemRandomAccess => "MEM_RANDOM_ACCESS",
         }
     }
 }

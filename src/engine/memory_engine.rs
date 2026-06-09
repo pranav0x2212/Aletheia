@@ -138,6 +138,24 @@ impl MemoryEngine {
                     Vec::new()
                 }
             }
+            Operation::MemRandomAccess => {
+                if !buffers.is_empty() && params.len() >= 1 {
+                    let buffer = buffers[0];
+                    let iterations = params[0] as usize;
+                    let n = buffer.len();
+                    let mut result = Vec::with_capacity(iterations);
+                    
+                    // Linear iteration through pre-shuffled indices stored in buffer
+                    // (no dependency like pointer chase, but random spatial access)
+                    for i in 0..iterations {
+                        let idx = buffer[i % n] as usize % n;
+                        result.push(buffer[idx]);
+                    }
+                    result
+                } else {
+                    Vec::new()
+                }
+            }
         };
 
         let elapsed = start.elapsed();
@@ -251,6 +269,24 @@ impl MemoryEngine {
                         let val = buffer[idx];
                         result.push(val);
                         idx = (val as usize) % n;
+                    }
+                    result
+                } else {
+                    Vec::new()
+                }
+            }
+            Operation::MemRandomAccess => {
+                if !buffers.is_empty() && params.len() >= 1 {
+                    let buffer = buffers[0];
+                    let iterations = params[0] as usize;
+                    let n = buffer.len();
+                    let mut result = Vec::with_capacity(iterations);
+                    
+                    // Linear iteration through pre-shuffled indices stored in buffer
+                    // (no dependency like pointer chase, but random spatial access)
+                    for i in 0..iterations {
+                        let idx = buffer[i % n] as usize % n;
+                        result.push(buffer[idx]);
                     }
                     result
                 } else {

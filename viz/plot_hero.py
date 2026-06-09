@@ -79,12 +79,15 @@ class HeroPlot:
             return f"{mb}MB"
 
     @classmethod
-    def create_plot(cls, seq_data: Dict, ptr_data: Dict, output_path: str) -> None:
+    def create_plot(cls, seq_data: Dict, rand_data: Dict, ptr_data: Dict, output_path: str) -> None:
         """Create clean, minimal hero plot."""
         
         # Get sorted sizes and compute medians
         seq_sizes_bytes = sorted(seq_data.keys())
         seq_medians = [np.median(seq_data[s]) for s in seq_sizes_bytes]
+
+        rand_sizes_bytes = sorted(rand_data.keys())
+        rand_medians = [np.median(rand_data[s]) for s in rand_sizes_bytes]
         
         ptr_sizes_bytes = sorted(ptr_data.keys())
         ptr_medians = [np.median(ptr_data[s]) for s in ptr_sizes_bytes]
@@ -97,6 +100,11 @@ class HeroPlot:
                  linestyle='--', linewidth=2.5, marker='o', markersize=8,
                  label='Sequential Scan', color='#1f77b4', alpha=0.75,
                  markerfacecolor='white', markeredgewidth=2, zorder=5)
+        
+        ax.loglog(rand_sizes_bytes, rand_medians,
+                  linestyle='-', linewidth=2.8, marker='^', markersize=8,
+                  label='Random Access', color='#2ca02c', alpha=0.85,
+                  markerfacecolor='white', markeredgewidth=2, zorder=4)
         
         ax.loglog(ptr_sizes_bytes, ptr_medians,
                  linestyle='-', linewidth=3.5, marker='s', markersize=8,
@@ -139,6 +147,10 @@ class HeroPlot:
             ax.text(seq_sizes_bytes[mid_idx], seq_medians[mid_idx] * 0.4,
                    'prefetching', fontsize=9, color='#1f77b4', alpha=0.6,
                    style='italic', ha='center')
+            
+        if rand_medians:
+            mid_idx = len(rand_medians) // 2
+            ax.text(4 * 1024 * 1024, 6.0, 'MLP Survives', fontsize=9, color='#2ca02c', alpha=0.7, style='italic', ha='center')
         
         # Pointer annotation
         if ptr_medians:
@@ -150,7 +162,7 @@ class HeroPlot:
         # Labels and title
         ax.set_xlabel('Working Set Size', fontsize=12, fontweight='bold')
         ax.set_ylabel('Latency (ns/access)', fontsize=12, fontweight='bold')
-        ax.set_title('When the CPU Stops Helping\nSequential access vs pointer chasing',
+        ax.set_title('Memory Access Patterns Reveal Hidden Latency\n' 'Why the CPU helps some workloads more than others',
                     fontsize=14, fontweight='bold', pad=15)
         
         # Clean legend
@@ -167,9 +179,10 @@ def main():
     """Main entry point."""
     results_dir = Path('results')
     seq_file = results_dir / 'working_set_sweep_sequential.jsonl'
+    rand_file = results_dir / 'working_set_sweep_random.jsonl'
     ptr_file = results_dir / 'working_set_sweep_pointer.jsonl'
     
-    if not seq_file.exists() or not ptr_file.exists():
+    if not seq_file.exists() or not rand_file.exists() or not ptr_file.exists():
         print("Error: Required JSONL files not found")
         return
     
@@ -177,6 +190,7 @@ def main():
     
     plot = HeroPlot()
     seq_data = plot.read_data(str(seq_file))
+    rand_data = plot.read_data(str(rand_file))
     ptr_data = plot.read_data(str(ptr_file))
     
     print(f"  Sequential: {len(seq_data)} working set sizes")
@@ -188,8 +202,8 @@ def main():
         print(f"    {plot.format_size(size):>10} - {len(ptr_data[size]):2d} runs, median={np.median(ptr_data[size]):7.2f} ns")
     
     print("\nGenerating hero plot...")
-    plot.create_plot(seq_data, ptr_data,
-                    str(results_dir / 'working_set_hero_plot.png'))
+    plot.create_plot(seq_data, rand_data,ptr_data,
+                    str(results_dir / 'working_set_hero_plot_v2.png'))
     
     print("\n" + "="*70)
     print("✓ Hero plot complete!")

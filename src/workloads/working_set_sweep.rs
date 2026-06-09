@@ -30,6 +30,33 @@ impl WorkingSetSweep {
         indices
     }
 
+    /// Generate random indices for independent random access
+    pub fn generate_random_indices(buffer_size: usize) -> Vec<u32> {
+        let n = buffer_size as u32;
+        let mut indices: Vec<u32> = (0..n).collect();
+        let mut rng = thread_rng();
+        indices.shuffle(&mut rng);
+        indices
+    }
+
+    /// Get scaled iteration count based on working set size to reduce measurement noise
+    /// Small sets (L1/L2): baseline, Medium (L3): 3x, Large (DRAM): 10x
+    pub fn get_scaled_iterations(working_set_bytes: usize) -> usize {
+        const L2_BOUNDARY: usize = 256 * 1024;      // 256KB
+        const L3_BOUNDARY: usize = 4 * 1024 * 1024; // 4MB
+        const L1_BASELINE: usize = 100_000;
+        const L3_MULTIPLIER: usize = 3;
+        const DRAM_MULTIPLIER: usize = 10;
+
+        if working_set_bytes <= L2_BOUNDARY {
+            L1_BASELINE
+        } else if working_set_bytes <= L3_BOUNDARY {
+            L1_BASELINE * L3_MULTIPLIER
+        } else {
+            L1_BASELINE * DRAM_MULTIPLIER
+        }
+    }
+
     /// Execute pointer chasing on CPU
     pub fn execute_cpu_pointer_chase(
         &self,
@@ -51,6 +78,32 @@ impl WorkingSetSweep {
     ) -> ExecutionResult {
         engine.execute_memory_engine(
             Operation::MemPointerChase,
+            &[buffer_idx],
+            &[self.iterations as u32],
+        )
+    }
+
+    /// Execute independent random access on CPU
+    pub fn execute_cpu_random_access(
+        &self,
+        engine: &MemoryEngine,
+        buffer_idx: usize,
+    ) -> ExecutionResult {
+        engine.execute_cpu(
+            Operation::MemRandomAccess,
+            &[buffer_idx],
+            &[self.iterations as u32],
+        )
+    }
+
+    /// Execute independent random access on memory engine
+    pub fn execute_memory_engine_random_access(
+        &self,
+        engine: &MemoryEngine,
+        buffer_idx: usize,
+    ) -> ExecutionResult {
+        engine.execute_memory_engine(
+            Operation::MemRandomAccess,
             &[buffer_idx],
             &[self.iterations as u32],
         )
