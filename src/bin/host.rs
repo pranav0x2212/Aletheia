@@ -105,6 +105,10 @@ enum ExperimentType {
         /// Measurement mode: "sequential" (old scan-based) or "pointer" (new pointer-chase)
         #[arg(long, default_value = "pointer")]
         mode: String,
+
+        /// Run only a specific working set size (e.g. 64KB, 16MB)
+        #[arg(long)]
+        size: Option<String>,
     },
 }
 
@@ -140,8 +144,8 @@ async fn main() -> anyhow::Result<()> {
                 ExperimentType::StrideTesting { node_bin } => {
                     run_stride_testing_experiment(&node_bin).await?;
                 }
-                ExperimentType::WorkingSetSweep { mode } => {
-                    run_working_set_sweep_experiment(&mode).await?;
+                ExperimentType::WorkingSetSweep { mode , size } => {
+                    run_working_set_sweep_experiment(&mode, size.as_deref()).await?;
                 }
             }
         }
@@ -860,7 +864,24 @@ async fn run_stride_testing_experiment(node_bin: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn run_working_set_sweep_experiment(mode: &str) -> anyhow::Result<()> {
+fn parse_working_set_size(size: &str) -> anyhow::Result<usize> {
+    let size = size.trim().to_uppercase();
+
+    if let Some(kb) = size.strip_suffix("KB") {
+        return Ok(kb.parse::<usize>()? * 1024);
+    }
+
+    if let Some(mb) = size.strip_suffix("MB") {
+        return Ok(mb.parse::<usize>()? * 1024 * 1024);
+    }
+
+    anyhow::bail!(
+        "Invalid working set size '{}'. Use values like 64KB or 16MB.",
+        size
+    );
+}
+
+async fn run_working_set_sweep_experiment(mode: &str, size: Option<&str>) -> anyhow::Result<()> {
     let is_pointer = mode == "pointer";
     let is_sequential = mode == "sequential";
     let is_random = mode == "random";
@@ -924,7 +945,12 @@ async fn run_working_set_sweep_experiment(mode: &str) -> anyhow::Result<()> {
 
     let mut all_results = Vec::new();
 
-    for working_set_bytes in &workload.working_set_sizes {
+    let working_set_sizes = match size {
+        Some(size) => vec![parse_working_set_size(size)?],
+        None => workload.working_set_sizes.clone(),
+    };
+
+    for working_set_bytes in & working_set_sizes {
         let size_kb = working_set_bytes / 1024;
         let size_mb = working_set_bytes / (1024 * 1024);
 
