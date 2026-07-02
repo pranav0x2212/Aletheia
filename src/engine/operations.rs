@@ -24,9 +24,3 @@ impl Operation {
         }
     }
 }
-
-pub trait MemoryOp {
-    fn execute_cpu(&self, buffers: &[&[u32]]) -> Vec<u32>;
-    fn execute_memory_engine(&self, buffers: &[&[u32]]) -> Vec<u32>;
-    fn operation_type(&self) -> Operation;
-}
