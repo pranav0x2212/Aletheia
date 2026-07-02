@@ -1,5 +1,5 @@
 use crate::OperationStats;
-pub use super::operations::{Operation, MemoryOp};
+pub use super::operations::{Operation};
 use std::time::Instant;
 
 pub struct MemoryEngine {
