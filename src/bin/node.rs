@@ -53,7 +53,6 @@ async fn main() -> anyhow::Result<()> {
 
     // Start listening
     let addr = format!("0.0.0.0:{}", args.port);
-    println!("Aletheia Memory Node listening on {}", addr);
     listen_and_serve(&addr, move |cmd: Command| {
         handle_command(cmd, &engine_clone, &buffers_clone)
     })
@@ -68,6 +67,18 @@ fn handle_command(
     buffers: &BufferStore,
 ) -> Response {
     let start = Instant::now();
+
+    let op_name = match &cmd.op {
+        MemOp::MemCopy { .. } => "MemCopy",
+        MemOp::MemVecAdd { .. } => "MemVecAdd",
+        MemOp::MemVecAnd { .. } => "MemVecAnd",
+        MemOp::MemVecOr { .. } => "MemVecOr",
+        MemOp::MemScan { .. } => "MemScan",
+        MemOp::MemStrideScan { .. } => "MemStrideScan",
+        MemOp::MemPointerChase { .. } => "MemPointerChase",
+    };
+
+    println!("[INFO] Executing {}", op_name);
     
     let result = match cmd.op {
         MemOp::MemCopy { buffer } => {
@@ -164,6 +175,11 @@ fn handle_command(
     match result {
         Ok(exec_result) => {
             let elapsed = start.elapsed();
+            println!(
+                "[INFO] Completed {} in {:.3} ms",
+                op_name,
+                elapsed.as_secs_f64() * 1000.0
+            );
             // Derive cycles from actual elapsed time using estimated CPU frequency (~4 GHz)
             let estimated_cpu_freq_hz = 4_000_000_000.0;
             let cycles = (elapsed.as_secs_f64() * estimated_cpu_freq_hz) as u64;
@@ -179,10 +195,14 @@ fn handle_command(
                 ),
             }
         },
-        Err(e) => Response {
-            id: cmd.id,
-            status: ResponseStatus::Error,
-            data: ResponseData::error(e),
-        },
+        Err(e) => {
+            println!("[ERROR] {} failed: {}", op_name, e);
+        
+            Response {
+                id: cmd.id,
+                status: ResponseStatus::Error,
+                data: ResponseData::error(e),
+            }
+        }
     }
 }
