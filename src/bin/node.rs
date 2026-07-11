@@ -53,7 +53,6 @@ async fn main() -> anyhow::Result<()> {
 
     // Start listening
     let addr = format!("0.0.0.0:{}", args.port);
-    println!("Aletheia Memory Node listening on {}", addr);
     listen_and_serve(&addr, move |cmd: Command| {
         handle_command(cmd, &engine_clone, &buffers_clone)
     })
