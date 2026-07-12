@@ -4,6 +4,7 @@ pub mod runtime;
 pub mod protocol;
 pub mod network;
 pub mod results;
+pub mod profiler;
 
 pub use engine::{MemoryEngine, Operation};
 pub use runtime::Executor;
