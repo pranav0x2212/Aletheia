@@ -1,7 +1,8 @@
 use aletheia::{
-    engine::{MemoryEngine, Operation},
+    engine::{MemoryEngine, Operation, ExecutionResult},
     protocol::{Command, Response, ResponseStatus, ResponseData, MemOp},
     network::listen_and_serve,
+    profiler,
 };
 use clap::Parser;
 use std::collections::HashMap;
@@ -60,6 +61,23 @@ async fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
+fn execute_with_profiling(
+    engine: &Arc<Mutex<MemoryEngine>>,
+    op: Operation,
+    buffer_indices: &[usize],
+    params: &[u32],
+) -> Result<ExecutionResult, String> {
+    let engine_lock = engine.lock().unwrap();
+
+    let (result, counters) = profiler::measure(|| {
+        engine_lock.execute_memory_engine(op, buffer_indices, params)
+    })
+    .map_err(|e| e.to_string())?;
+
+    println!("{:#?}", counters);
+
+    Ok(result)
+}
 
 fn handle_command(
     cmd: Command,
@@ -85,9 +103,7 @@ fn handle_command(
             let buffers_lock = buffers.lock().unwrap();
             if let Some(&(idx, _size)) = buffers_lock.get(&buffer) {
                 drop(buffers_lock);
-                let engine_lock = engine.lock().unwrap();
-                let result = engine_lock.execute_memory_engine(Operation::MemCopy, &[idx], &[]);
-                Ok(result)
+                execute_with_profiling(engine, Operation::MemCopy, &[idx], &[])
             } else {
                 Err(format!("Buffer not found: {}", buffer))
             }
@@ -100,9 +116,7 @@ fn handle_command(
 
             match (idx_a, idx_b) {
                 (Some(a), Some(b)) => {
-                    let engine_lock = engine.lock().unwrap();
-                    let result = engine_lock.execute_memory_engine(Operation::MemVecAdd, &[a, b], &[]);
-                    Ok(result)
+                    execute_with_profiling(engine, Operation::MemVecAdd, &[a, b], &[])
                 }
                 _ => Err("Buffers not found".to_string()),
             }
@@ -115,9 +129,7 @@ fn handle_command(
 
             match (idx_a, idx_b) {
                 (Some(a), Some(b)) => {
-                    let engine_lock = engine.lock().unwrap();
-                    let result = engine_lock.execute_memory_engine(Operation::MemVecAnd, &[a, b], &[]);
-                    Ok(result)
+                    execute_with_profiling(engine, Operation::MemVecAnd, &[a, b], &[])
                 }
                 _ => Err("Buffers not found".to_string()),
             }
@@ -130,9 +142,7 @@ fn handle_command(
 
             match (idx_a, idx_b) {
                 (Some(a), Some(b)) => {
-                    let engine_lock = engine.lock().unwrap();
-                    let result = engine_lock.execute_memory_engine(Operation::MemVecOr, &[a, b], &[]);
-                    Ok(result)
+                    execute_with_profiling(engine, Operation::MemVecOr, &[a, b], &[])
                 }
                 _ => Err("Buffers not found".to_string()),
             }
@@ -141,9 +151,7 @@ fn handle_command(
             let buffers_lock = buffers.lock().unwrap();
             if let Some(&(idx, _)) = buffers_lock.get(&buffer) {
                 drop(buffers_lock);
-                let engine_lock = engine.lock().unwrap();
-                let result = engine_lock.execute_memory_engine(Operation::MemScan, &[idx], &[threshold]);
-                Ok(result)
+                execute_with_profiling(engine, Operation::MemScan, &[idx], &[threshold])
             } else {
                 Err(format!("Buffer not found: {}", buffer))
             }
@@ -152,9 +160,12 @@ fn handle_command(
             let buffers_lock = buffers.lock().unwrap();
             if let Some(&(idx, _)) = buffers_lock.get(&buffer) {
                 drop(buffers_lock);
-                let engine_lock = engine.lock().unwrap();
-                let result = engine_lock.execute_memory_engine(Operation::MemStrideScan, &[idx], &[stride as u32]);
-                Ok(result)
+                execute_with_profiling(
+                    engine,
+                    Operation::MemStrideScan,
+                    &[idx],
+                    &[stride as u32],
+                )
             } else {
                 Err(format!("Buffer not found: {}", buffer))
             }
@@ -163,9 +174,12 @@ fn handle_command(
             let buffers_lock = buffers.lock().unwrap();
             if let Some(&(idx, _)) = buffers_lock.get(&buffer) {
                 drop(buffers_lock);
-                let engine_lock = engine.lock().unwrap();
-                let result = engine_lock.execute_memory_engine(Operation::MemPointerChase, &[idx], &[iterations as u32]);
-                Ok(result)
+                execute_with_profiling(
+                    engine,
+                    Operation::MemPointerChase,
+                    &[idx],
+                    &[iterations as u32],
+                )
             } else {
                 Err(format!("Buffer not found: {}", buffer))
             }
