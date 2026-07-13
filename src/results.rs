@@ -11,6 +11,9 @@ pub struct ExperimentResult {
     pub working_set_bytes: u64,
     pub runtime_ms: u128,
     pub cycles: u64,
+    pub instructions: u64,
+    pub cache_references: u64,
+    pub cache_misses: u64,
     pub memory_access_bytes: u64,
     pub data_moved_bytes: u64,
     pub operations: u64,
@@ -28,6 +31,9 @@ impl ExperimentResult {
         working_set_bytes: u64,
         runtime_ms: u128,
         cycles: u64,
+        instructions: u64,
+        cache_references: u64,
+        cache_misses: u64,
         memory_access_bytes: u64,
         data_moved_bytes: u64,
         operations: u64,
@@ -44,6 +50,9 @@ impl ExperimentResult {
             working_set_bytes,
             runtime_ms,
             cycles,
+            instructions,
+            cache_references,
+            cache_misses,
             memory_access_bytes,
             data_moved_bytes,
             operations,
@@ -59,6 +68,9 @@ impl ExperimentResult {
         working_set_bytes: u64,
         runtime_ms: u128,
         cycles: u64,
+        instructions: u64,
+        cache_references: u64,
+        cache_misses: u64,
         memory_access_bytes: u64,
         data_moved_bytes: u64,
         operations: u64,
@@ -76,6 +88,9 @@ impl ExperimentResult {
             working_set_bytes,
             runtime_ms,
             cycles,
+            instructions,
+            cache_references,
+            cache_misses,
             memory_access_bytes,
             data_moved_bytes,
             operations,
@@ -130,7 +145,7 @@ mod tests {
     fn test_experiment_result_serialization() {
         let operations = 256 * 1024 * 1024 / 4;
         let working_set_bytes = 256 * 1024 * 1024;
-        let result = ExperimentResult::new("scan", "cpu", working_set_bytes, 92, 121241, 268000000, 133000000, operations);
+        let result = ExperimentResult::new("scan", "cpu", working_set_bytes, 92, 121241, 0, 0, 0, 268000000, 133000000, operations);
         let json = result.to_json_line().unwrap();
         assert!(json.contains("\"experiment\":\"scan\""));
         assert!(json.contains("\"mode\":\"cpu\""));
