@@ -62,6 +62,9 @@ pub enum ResponseStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResponseData {
     pub cycles: u64,
+    pub instructions: u64,
+    pub cache_references: u64,
+    pub cache_misses: u64,
     pub memory_access: u64,
     pub data_moved: u64,
     pub result_count: usize,
@@ -70,9 +73,20 @@ pub struct ResponseData {
 }
 
 impl ResponseData {
-    pub fn ok(cycles: u64, memory_access: u64, data_moved: u64, result_count: usize) -> Self {
+    pub fn ok(
+        cycles: u64,
+        instructions: u64,
+        cache_references: u64,
+        cache_misses: u64,
+        memory_access: u64,
+        data_moved: u64,
+        result_count: usize,
+    ) -> Self {
         ResponseData {
             cycles,
+            instructions,
+            cache_references,
+            cache_misses,
             memory_access,
             data_moved,
             result_count,
@@ -83,6 +97,9 @@ impl ResponseData {
     pub fn error(msg: String) -> Self {
         ResponseData {
             cycles: 0,
+            instructions: 0,
+            cache_references: 0,
+            cache_misses: 0,
             memory_access: 0,
             data_moved: 0,
             result_count: 0,
