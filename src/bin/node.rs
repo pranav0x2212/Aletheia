@@ -2,7 +2,7 @@ use aletheia::{
     engine::{MemoryEngine, Operation, ExecutionResult},
     protocol::{Command, Response, ResponseStatus, ResponseData, MemOp},
     network::listen_and_serve,
-    profiler,
+    profiler::{self, HardwareCounters},
 };
 use clap::Parser;
 use std::collections::HashMap;
@@ -28,13 +28,11 @@ async fn main() -> anyhow::Result<()> {
     let buffers: BufferStore = Arc::new(Mutex::new(HashMap::new()));
     let mut engine = MemoryEngine::new();
 
-    // Initialize default buffers
     println!("Initializing memory engine...");
     let dataset_size = args.dataset_size * 1024 * 1024 / 4; // Convert MB to u32 elements
     
     let buf_dataset = engine.allocate_buffer(dataset_size, 0);
-    
-    // Fill with pseudo-random data
+
     if let Some(buf) = engine.get_buffer_mut(buf_dataset) {
         for (i, val) in buf.iter_mut().enumerate() {
             *val = ((i as u32).wrapping_mul(7919)) % 1000;
@@ -47,7 +45,6 @@ async fn main() -> anyhow::Result<()> {
 
     println!("Dataset initialized: {}MB", args.dataset_size);
 
-    // Wrap engine in Arc<Mutex<>> for thread-safe access
     let engine = Arc::new(Mutex::new(engine));
     let buffers_clone = buffers.clone();
     let engine_clone = engine.clone();
@@ -66,7 +63,7 @@ fn execute_with_profiling(
     op: Operation,
     buffer_indices: &[usize],
     params: &[u32],
-) -> Result<ExecutionResult, String> {
+) -> Result<(ExecutionResult, HardwareCounters), String> {
     let engine_lock = engine.lock().unwrap();
 
     let (result, counters) = profiler::measure(|| {
@@ -74,9 +71,7 @@ fn execute_with_profiling(
     })
     .map_err(|e| e.to_string())?;
 
-    println!("{:#?}", counters);
-
-    Ok(result)
+    Ok((result, counters))
 }
 
 fn handle_command(
@@ -187,22 +182,22 @@ fn handle_command(
     };
 
     match result {
-        Ok(exec_result) => {
+        Ok((exec_result, counters)) => {
             let elapsed = start.elapsed();
             println!(
                 "[INFO] Completed {} in {:.3} ms",
                 op_name,
                 elapsed.as_secs_f64() * 1000.0
             );
-            // Derive cycles from actual elapsed time using estimated CPU frequency (~4 GHz)
-            let estimated_cpu_freq_hz = 4_000_000_000.0;
-            let cycles = (elapsed.as_secs_f64() * estimated_cpu_freq_hz) as u64;
-            
+
             Response {
                 id: cmd.id,
                 status: ResponseStatus::Ok,
                 data: ResponseData::ok(
-                    cycles,
+                    counters.cycles,
+                    counters.instructions,
+                    counters.cache_references,
+                    counters.cache_misses,
                     exec_result.stats.memory_access,
                     exec_result.stats.data_moved,
                     exec_result.data.len(),
