@@ -93,12 +93,20 @@ enum ExperimentType {
         /// Node binary path
         #[arg(long, default_value = "./target/release/aletheia-node")]
         node_bin: String,
+
+        /// Use an existing remote node instead of spawning a local one
+        #[arg(long)]
+        node: Option<String>,
     },
     /// Test memory access stride effects
     StrideTesting {
         /// Node binary path
         #[arg(long, default_value = "./target/release/aletheia-node")]
         node_bin: String,
+
+        /// Use an existing remote node instead of spawning a local one
+        #[arg(long)]
+        node: Option<String>,
     },
     /// Sweep working set sizes to measure cache hierarchy effects
     WorkingSetSweep {
@@ -138,11 +146,11 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Experiment { exp_type } => {
             match exp_type {
-                ExperimentType::DatasetScaling { node_bin } => {
-                    run_dataset_scaling_experiment(&node_bin).await?;
+                ExperimentType::DatasetScaling { node_bin, node } => {
+                    run_dataset_scaling_experiment(&node_bin, node.as_deref()).await?;
                 }
-                ExperimentType::StrideTesting { node_bin } => {
-                    run_stride_testing_experiment(&node_bin).await?;
+                ExperimentType::StrideTesting { node_bin, node } => {
+                    run_stride_testing_experiment(&node_bin, node.as_deref()).await?;
                 }
                 ExperimentType::WorkingSetSweep { mode , size } => {
                     run_working_set_sweep_experiment(&mode, size.as_deref()).await?;
@@ -397,7 +405,7 @@ async fn run_benchmark(node: &str, export_path: Option<&str>) -> anyhow::Result<
     Ok(())
 }
 
-async fn run_dataset_scaling_experiment(node_bin: &str) -> anyhow::Result<()> {
+async fn run_dataset_scaling_experiment(node_bin: &str, node: Option<&str>) -> anyhow::Result<()> {
     println!("Dataset Scaling Experiment");
     println!("==========================\n");
 
@@ -411,17 +419,24 @@ async fn run_dataset_scaling_experiment(node_bin: &str) -> anyhow::Result<()> {
         println!("║  Dataset Size: {}MB", format!("{:>5}", dataset_mb).trim_end());
         println!("╚══════════════════════════════════════╝");
 
-        // Start node with this dataset size
-        let mut node_process = start_node(node_bin, 9000, dataset_mb)?;
-        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+        // Start node with this dataset size (unless an existing remote node was supplied)
+        let mut node_process = if node.is_none() {
+            Some(start_node(node_bin, 9000, dataset_mb)?)
+        } else {
+            None
+        };
+        let node_addr = node.unwrap_or("127.0.0.1:9000");
+        if node_process.is_some() {
+            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+        }
 
         // Run scan workload
         println!("\n  Running scan...");
-        let scan_results = run_scan_experiment("127.0.0.1:9000", dataset_mb).await?;
+        let scan_results = run_scan_experiment(node_addr, dataset_mb).await?;
         
         // Run vec-add workload
         println!("\n  Running vector-add...");
-        let vecadd_results = run_vecadd_experiment("127.0.0.1:9000", dataset_mb).await?;
+        let vecadd_results = run_vecadd_experiment(node_addr, dataset_mb).await?;
 
         // Collect all results
         let mut all_results = vec![];
@@ -432,9 +447,11 @@ async fn run_dataset_scaling_experiment(node_bin: &str) -> anyhow::Result<()> {
         ExperimentResult::append_batch_to_file(&all_results, export_file)?;
         println!("\n✓ Results for {}MB exported", dataset_mb);
 
-        // Stop node
-        stop_node(&mut node_process)?;
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        // Stop node (only if we started one)
+        if let Some(ref mut process) = node_process {
+            stop_node(process)?;
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        }
     }
 
     println!("\n✓ All dataset scaling experiments completed!");
@@ -812,7 +829,7 @@ async fn run_pointer_chase(
     Ok(())
 }
 
-async fn run_stride_testing_experiment(node_bin: &str) -> anyhow::Result<()> {
+async fn run_stride_testing_experiment(node_bin: &str, node: Option<&str>) -> anyhow::Result<()> {
     println!("Stride Testing Experiment");
     println!("=========================\n");
 
@@ -821,9 +838,16 @@ async fn run_stride_testing_experiment(node_bin: &str) -> anyhow::Result<()> {
 
     println!("Testing strides: {:?}\n", stride_values);
 
-    // Start node once
-    let mut node_process = start_node(node_bin, 9000, 256)?;
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+    // Start node once (unless an existing remote node was supplied)
+    let mut node_process = if node.is_none() {
+        Some(start_node(node_bin, 9000, 256)?)
+    } else {
+        None
+    };
+    let node_addr = node.unwrap_or("127.0.0.1:9000");
+    if node_process.is_some() {
+        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+    }
 
     for stride in stride_values {
         println!("Running stride scan with stride={}", stride);
@@ -869,7 +893,7 @@ async fn run_stride_testing_experiment(node_bin: &str) -> anyhow::Result<()> {
         };
 
         let start = Instant::now();
-        match send_command("127.0.0.1:9000", cmd).await {
+        match send_command(node_addr, cmd).await {
             Ok(response) => {
                 let mem_time = start.elapsed();
                 // Derive cycles from measured elapsed time (4 GHz CPU frequency)
@@ -901,8 +925,10 @@ async fn run_stride_testing_experiment(node_bin: &str) -> anyhow::Result<()> {
         }
     }
 
-    // Stop node
-    stop_node(&mut node_process)?;
+    // Stop node (only if we started one)
+    if let Some(ref mut process) = node_process {
+        stop_node(process)?;
+    }
 
     println!("✓ All stride testing experiments completed!");
     println!("✓ Results saved to {}", export_file);
