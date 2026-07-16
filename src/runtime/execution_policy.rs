@@ -13,6 +13,7 @@ pub enum ExecutionPolicy {
     Cpu,
     RemoteNode { address: String },
 }
+
 pub struct PolicyResult {
     pub elapsed: Duration,
     pub cycles: u64,
@@ -25,7 +26,7 @@ pub struct PolicyResult {
 }
 
 impl ExecutionPolicy {
-    pub async fn run_scan(&self, buf_size: usize, threshold: u32) -> Result<PolicyResult> {
+    pub async fn run_scan(&self, buf_size: usize, buffer: &str, threshold: u32) -> Result<PolicyResult> {
         match self {
             ExecutionPolicy::Cpu => {
                 let mut engine = MemoryEngine::new();
@@ -56,7 +57,7 @@ impl ExecutionPolicy {
                 let cmd = Command {
                     id: Uuid::new_v4().to_string(),
                     op: MemOp::MemScan {
-                        buffer: "dataset".to_string(),
+                        buffer: buffer.to_string(),
                         threshold,
                     },
                 };
