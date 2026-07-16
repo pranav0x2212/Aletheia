@@ -9,6 +9,7 @@ use clap::{Parser, Subcommand};
 use std::time::Instant;
 use std::process::{Command as ProcessCommand, Child};
 use uuid::Uuid;
+use aletheia::runtime::execution_policy::ExecutionPolicy;
 
 #[derive(Parser)]
 #[command(name = "aletheia-host")]
@@ -482,66 +483,41 @@ async fn run_scan_experiment(
 ) -> anyhow::Result<Vec<ExperimentResult>> {
     let mut results = Vec::new();
 
-    // CPU mode
-    let mut engine = MemoryEngine::new();
     let buf_size = dataset_mb * 1024 * 1024 / 4;
-    let buf = engine.allocate_buffer(buf_size, 0);
-
-    if let Some(buf_data) = engine.get_buffer_mut(buf) {
-        for (i, val) in buf_data.iter_mut().enumerate() {
-            *val = ((i as u32).wrapping_mul(7919)) % 1000;
-        }
-    }
-
-    let start = Instant::now();
-    let cpu_result = engine.execute_cpu(Operation::MemScan, &[buf], &[500]);
-    let cpu_time = start.elapsed();
-
     let operations = dataset_mb as u64 * 1024 * 1024 / 4;
     let working_set_bytes = (dataset_mb as u64) * 1024 * 1024;
+
+    // CPU mode
+    let cpu = ExecutionPolicy::Cpu.run_scan(buf_size, 500).await?;
     results.push(ExperimentResult::new(
         "scan",
         "cpu",
         working_set_bytes,
-        cpu_time.as_millis(),
-        cpu_result.stats.cycles,
-        0,
-        0,
-        0,
-        cpu_result.stats.memory_access,
-        cpu_result.stats.data_moved,
+        cpu.elapsed_ms,
+        cpu.cycles,
+        cpu.instructions,
+        cpu.cache_references,
+        cpu.cache_misses,
+        cpu.memory_access,
+        cpu.data_moved,
         operations,
     ));
 
     // Memory engine mode
-    let cmd = Command {
-        id: Uuid::new_v4().to_string(),
-        op: MemOp::MemScan {
-            buffer: "dataset".to_string(),
-            threshold: 500,
-        },
-    };
-
-    let start = Instant::now();
-    match send_command(node, cmd).await {
-        Ok(response) => {
-            let mem_time = start.elapsed();
-            // Derive cycles from measured elapsed time (4 GHz CPU frequency)
-            let estimated_cpu_freq_hz = 4_000_000_000.0;
-            let mem_cycles = (mem_time.as_secs_f64() * estimated_cpu_freq_hz) as u64;
-            let operations = dataset_mb as u64 * 1024 * 1024 / 4;
-            let working_set_bytes = (dataset_mb as u64) * 1024 * 1024;
+    let remote = ExecutionPolicy::RemoteNode { address: node.to_string() };
+    match remote.run_scan(buf_size, 500).await {
+        Ok(mem) => {
             results.push(ExperimentResult::new(
                 "scan",
                 "memory_engine",
                 working_set_bytes,
-                mem_time.as_millis(),
-                mem_cycles,
-                response.data.instructions,
-                response.data.cache_references,
-                response.data.cache_misses,
-                response.data.memory_access,
-                response.data.data_moved,
+                mem.elapsed_ms,
+                mem.cycles,
+                mem.instructions,
+                mem.cache_references,
+                mem.cache_misses,
+                mem.memory_access,
+                mem.data_moved,
                 operations,
             ));
         }
