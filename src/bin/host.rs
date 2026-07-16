@@ -9,6 +9,7 @@ use clap::{Parser, Subcommand};
 use std::time::Instant;
 use std::process::{Command as ProcessCommand, Child};
 use uuid::Uuid;
+
 use aletheia::runtime::execution_policy::ExecutionPolicy;
 
 #[derive(Parser)]
@@ -271,42 +272,23 @@ async fn run_vec_add(
     println!("Vector Addition Workload");
     println!("========================\n");
 
-    // CPU mode
-    let mut engine = MemoryEngine::new();
     let buf_size = 256 * 1024 * 1024 / 4;
-    let buf_a_idx = engine.allocate_buffer(buf_size, 100);
-    let buf_b_idx = engine.allocate_buffer(buf_size, 200);
 
+    // CPU mode
     print!("CPU Mode (local execution): ");
-    let start = Instant::now();
-    let cpu_result = engine.execute_cpu(Operation::MemVecAdd, &[buf_a_idx, buf_b_idx], &[]);
-    let cpu_time = start.elapsed();
-    println!("{:.3}s", cpu_time.as_secs_f64());
+    let cpu = ExecutionPolicy::Cpu.run_vec_add(buf_size, buffer_a, buffer_b).await?;
+    println!("{:.3}s", cpu.elapsed.as_secs_f64());
 
     // Memory engine mode
     println!("Memory Engine Mode (remote): ");
     print!("  Offloading to node... ");
 
-    let start = Instant::now();
-    let cmd = Command {
-        id: Uuid::new_v4().to_string(),
-        op: MemOp::MemVecAdd {
-            buffer_a: buffer_a.to_string(),
-            buffer_b: buffer_b.to_string(),
-        },
-    };
-
-    let response = send_command(node, cmd).await?;
-    let mem_time = start.elapsed();
-    
-    // Derive cycles from measured elapsed time (4 GHz CPU frequency)
-    let estimated_cpu_freq_hz = 4_000_000_000.0;
-    let mem_cycles = (mem_time.as_secs_f64() * estimated_cpu_freq_hz) as u64;
-
-    println!("{:.3}s", mem_time.as_secs_f64());
+    let remote = ExecutionPolicy::RemoteNode { address: node.to_string() };
+    let mem = remote.run_vec_add(buf_size, buffer_a, buffer_b).await?;
+    println!("{:.3}s", mem.elapsed.as_secs_f64());
 
     println!("\n--- Comparison ---");
-    let speedup = cpu_time.as_secs_f64() / mem_time.as_secs_f64();
+    let speedup = cpu.elapsed.as_secs_f64() / mem.elapsed.as_secs_f64();
     println!("Speedup: {:.2}x", speedup);
 
     // Export results if requested
@@ -317,13 +299,13 @@ async fn run_vec_add(
             "vector_add",
             "cpu",
             working_set_bytes,
-            cpu_time.as_millis(),
-            cpu_result.stats.cycles,
+            cpu.elapsed.as_millis(),
+            cpu.cycles,
             0,
             0,
             0,
-            cpu_result.stats.memory_access,
-            cpu_result.stats.data_moved,
+            cpu.memory_access,
+            cpu.data_moved,
             operations,
         );
 
@@ -331,13 +313,13 @@ async fn run_vec_add(
             "vector_add",
             "memory_engine",
             working_set_bytes,
-            mem_time.as_millis(),
-            mem_cycles,
-            response.data.instructions,
-            response.data.cache_references,
-            response.data.cache_misses,
-            response.data.memory_access,
-            response.data.data_moved,
+            mem.elapsed.as_millis(),
+            mem.cycles,
+            mem.instructions,
+            mem.cache_references,
+            mem.cache_misses,
+            mem.memory_access,
+            mem.data_moved,
             operations,
         );
 
@@ -493,7 +475,7 @@ async fn run_scan_experiment(
         "scan",
         "cpu",
         working_set_bytes,
-        cpu.elapsed_ms,
+        cpu.elapsed.as_millis(),
         cpu.cycles,
         cpu.instructions,
         cpu.cache_references,
@@ -511,7 +493,7 @@ async fn run_scan_experiment(
                 "scan",
                 "memory_engine",
                 working_set_bytes,
-                mem.elapsed_ms,
+                mem.elapsed.as_millis(),
                 mem.cycles,
                 mem.instructions,
                 mem.cache_references,
@@ -611,25 +593,14 @@ async fn run_stride_scan(
 
     let dataset_size_mb = 256;
     let mut results = Vec::new();
+    let buf_size = dataset_size_mb * 1024 * 1024 / 4;
 
     // CPU mode
-    let mut engine = MemoryEngine::new();
-    let buf_size = dataset_size_mb * 1024 * 1024 / 4;
-    let buf = engine.allocate_buffer(buf_size, 0);
-
-    if let Some(buf_data) = engine.get_buffer_mut(buf) {
-        for (i, val) in buf_data.iter_mut().enumerate() {
-            *val = ((i as u32).wrapping_mul(7919)) % 1000;
-        }
-    }
-
     print!("CPU Mode (stride={}): ", stride);
-    let start = Instant::now();
-    let cpu_result = engine.execute_cpu(Operation::MemStrideScan, &[buf], &[stride as u32]);
-    let cpu_time = start.elapsed();
-    println!("{:.3}s", cpu_time.as_secs_f64());
-    println!("  Elements accessed: {}", cpu_result.data.len());
-    println!("  Cycles: {}", cpu_result.stats.cycles);
+    let cpu = ExecutionPolicy::Cpu.run_stride_scan(buf_size, stride).await?;
+    println!("{:.3}s", cpu.elapsed.as_secs_f64());
+    println!("  Elements accessed: {}", cpu.result_count);
+    println!("  Cycles: {}", cpu.cycles);
 
     let operations = dataset_size_mb as u64 * 1024 * 1024 / 4;
     let working_set_bytes = (dataset_size_mb as u64) * 1024 * 1024;
@@ -637,13 +608,13 @@ async fn run_stride_scan(
         "stride_scan",
         "cpu",
         working_set_bytes,
-        cpu_time.as_millis(),
-        cpu_result.stats.cycles,
+        cpu.elapsed.as_millis(),
+        cpu.cycles,
         0,
         0,
         0,
-        cpu_result.stats.memory_access,
-        cpu_result.stats.data_moved,
+        cpu.memory_access,
+        cpu.data_moved,
         operations,
         stride,
     ));
@@ -652,25 +623,12 @@ async fn run_stride_scan(
     println!("\nMemory Engine Mode (stride={}): ", stride);
     print!("  Offloading to node... ");
 
-    let start = Instant::now();
-    let cmd = Command {
-        id: Uuid::new_v4().to_string(),
-        op: MemOp::MemStrideScan {
-            buffer: "dataset".to_string(),
-            stride,
-        },
-    };
+    let remote = ExecutionPolicy::RemoteNode { address: node.to_string() };
+    let mem = remote.run_stride_scan(buf_size, stride).await?;
 
-    let response = send_command(node, cmd).await?;
-    let mem_time = start.elapsed();
-
-    // Derive cycles from measured elapsed time (4 GHz CPU frequency)
-    let estimated_cpu_freq_hz = 4_000_000_000.0;
-    let mem_cycles = (mem_time.as_secs_f64() * estimated_cpu_freq_hz) as u64;
-
-    println!("{:.3}s", mem_time.as_secs_f64());
-    println!("  Elements accessed: {}", response.data.result_count);
-    println!("  Cycles: {}", mem_cycles);
+    println!("{:.3}s", mem.elapsed.as_secs_f64());
+    println!("  Elements accessed: {}", mem.result_count);
+    println!("  Cycles: {}", mem.cycles);
 
     let operations = dataset_size_mb as u64 * 1024 * 1024 / 4;
     let working_set_bytes = (dataset_size_mb as u64) * 1024 * 1024;
@@ -678,19 +636,19 @@ async fn run_stride_scan(
         "stride_scan",
         "memory_engine",
         working_set_bytes,
-        mem_time.as_millis(),
-        mem_cycles,
-        response.data.instructions,
-        response.data.cache_references,
-        response.data.cache_misses,
-        response.data.memory_access,
-        response.data.data_moved,
+        mem.elapsed.as_millis(),
+        mem.cycles,
+        mem.instructions,
+        mem.cache_references,
+        mem.cache_misses,
+        mem.memory_access,
+        mem.data_moved,
         operations,
         stride,
     ));
 
     println!("\n--- Stride Impact ---");
-    let speedup = cpu_time.as_secs_f64() / mem_time.as_secs_f64();
+    let speedup = cpu.elapsed.as_secs_f64() / mem.elapsed.as_secs_f64();
     println!("Speedup: {:.2}x", speedup);
     println!("Stride effect: access pattern every {} elements", stride);
 
@@ -713,55 +671,32 @@ async fn run_pointer_chase(
     println!("======================\n");
     println!("Measuring memory latency with pointer chasing (no prefetching)\n");
 
-    // CPU mode
-    let mut engine = MemoryEngine::new();
     let buf_size = 256 * 1024 * 1024 / 4;
-    let buf = engine.allocate_buffer(buf_size, 0);
 
-    // Initialize pointer chain (each element points to next in chain)
-    if let Some(buf_data) = engine.get_buffer_mut(buf) {
-        for i in 0..buf_size {
-            let next = ((i as u32).wrapping_mul(12345).wrapping_add(67890)) % (buf_size as u32);
-            buf_data[i] = next;
-        }
-    }
-
+    // CPU mode
     print!("CPU Mode (iterations={}): ", iterations);
-    let start = Instant::now();
-    let cpu_result = engine.execute_cpu(Operation::MemPointerChase, &[buf], &[iterations as u32]);
-    let cpu_time = start.elapsed();
-    println!("{:.3}s", cpu_time.as_secs_f64());
-    println!("  Accesses: {}", cpu_result.data.len());
-    println!("  Cycles: {}", cpu_result.stats.cycles);
+    let cpu = ExecutionPolicy::Cpu
+        .run_pointer_chase(buf_size, buffer, iterations)
+        .await?;
+    println!("{:.3}s", cpu.elapsed.as_secs_f64());
+    println!("  Accesses: {}", cpu.result_count);
+    println!("  Cycles: {}", cpu.cycles);
 
     // Memory engine mode
     println!("\nMemory Engine Mode (iterations={}): ", iterations);
     print!("  Offloading to node... ");
 
-    let start = Instant::now();
-    let cmd = Command {
-        id: Uuid::new_v4().to_string(),
-        op: MemOp::MemPointerChase {
-            buffer: buffer.to_string(),
-            iterations,
-        },
-    };
+    let remote = ExecutionPolicy::RemoteNode { address: node.to_string() };
+    let mem = remote.run_pointer_chase(buf_size, buffer, iterations).await?;
 
-    let response = send_command(node, cmd).await?;
-    let mem_time = start.elapsed();
-
-    // Derive cycles from measured elapsed time (4 GHz CPU frequency)
-    let estimated_cpu_freq_hz = 4_000_000_000.0;
-    let mem_cycles = (mem_time.as_secs_f64() * estimated_cpu_freq_hz) as u64;
-
-    println!("{:.3}s", mem_time.as_secs_f64());
-    println!("  Accesses: {}", response.data.result_count);
-    println!("  Cycles: {}", mem_cycles);
+    println!("{:.3}s", mem.elapsed.as_secs_f64());
+    println!("  Accesses: {}", mem.result_count);
+    println!("  Cycles: {}", mem.cycles);
 
     println!("\n--- Memory Latency Analysis ---");
-    let speedup = cpu_time.as_secs_f64() / mem_time.as_secs_f64();
-    let latency_reduction = ((cpu_result.stats.cycles as f64 - mem_cycles as f64)
-        / cpu_result.stats.cycles as f64) * 100.0;
+    let speedup = cpu.elapsed.as_secs_f64() / mem.elapsed.as_secs_f64();
+    let latency_reduction = ((cpu.cycles as f64 - mem.cycles as f64)
+        / cpu.cycles as f64) * 100.0;
     println!("Speedup: {:.2}x", speedup);
     println!("Latency Reduction: {:.2}%", latency_reduction);
     println!("Note: Pointer chasing reveals true memory dependency latency");
@@ -774,13 +709,13 @@ async fn run_pointer_chase(
             "pointer_chase",
             "cpu",
             working_set_bytes,
-            cpu_time.as_millis(),
-            cpu_result.stats.cycles,
+            cpu.elapsed.as_millis(),
+            cpu.cycles,
             0,
             0,
             0,
-            cpu_result.stats.memory_access,
-            cpu_result.stats.data_moved,
+            cpu.memory_access,
+            cpu.data_moved,
             operations,
         );
 
@@ -788,13 +723,13 @@ async fn run_pointer_chase(
             "pointer_chase",
             "memory_engine",
             working_set_bytes,
-            mem_time.as_millis(),
-            mem_cycles,
-            response.data.instructions,
-            response.data.cache_references,
-            response.data.cache_misses,
-            response.data.memory_access,
-            response.data.data_moved,
+            mem.elapsed.as_millis(),
+            mem.cycles,
+            mem.instructions,
+            mem.cache_references,
+            mem.cache_misses,
+            mem.memory_access,
+            mem.data_moved,
             operations,
         );
 
