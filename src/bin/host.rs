@@ -173,56 +173,33 @@ async fn run_scan(
     println!("Dataset Scan Workload");
     println!("====================\n");
 
-    // CPU mode execution (local)
-    let mut engine = MemoryEngine::new();
     let buf_size = 256 * 1024 * 1024 / 4; // 256MB
-    let buf = engine.allocate_buffer(buf_size, 0);
 
-    if let Some(buf_data) = engine.get_buffer_mut(buf) {
-        for (i, val) in buf_data.iter_mut().enumerate() {
-            *val = ((i as u32).wrapping_mul(7919)) % 1000;
-        }
-    }
-
+    // CPU mode execution (local)
     print!("CPU Mode (local execution): ");
-    let start = Instant::now();
-    let cpu_result = engine.execute_cpu(Operation::MemScan, &[buf], &[threshold]);
-    let cpu_time = start.elapsed();
-    println!("{:.3}s", cpu_time.as_secs_f64());
-    println!("  Results: {} matches", cpu_result.data.len());
-    println!("  Cycles: {}", cpu_result.stats.cycles);
-    println!("  Memory Access: {}MB", cpu_result.stats.memory_access / 1_000_000);
+    let cpu = ExecutionPolicy::Cpu.run_scan(buf_size, buffer, threshold).await?;
+    println!("{:.3}s", cpu.elapsed.as_secs_f64());
+    println!("  Results: {} matches", cpu.result_count);
+    println!("  Cycles: {}", cpu.cycles);
+    println!("  Memory Access: {}MB", cpu.memory_access / 1_000_000);
 
     // Memory engine mode (remote)
     println!("\nMemory Engine Mode (remote on RPi): ");
     print!("  Offloading to node... ");
 
-    let start = Instant::now();
-    let cmd = Command {
-        id: Uuid::new_v4().to_string(),
-        op: MemOp::MemScan {
-            buffer: buffer.to_string(),
-            threshold,
-        },
-    };
+    let remote = ExecutionPolicy::RemoteNode { address: node.to_string() };
+    let mem = remote.run_scan(buf_size, buffer, threshold).await?;
 
-    let response = send_command(node, cmd).await?;
-    let mem_time = start.elapsed();
-    
-    // Derive cycles from measured elapsed time (4 GHz CPU frequency)
-    let estimated_cpu_freq_hz = 4_000_000_000.0;
-    let mem_cycles = (mem_time.as_secs_f64() * estimated_cpu_freq_hz) as u64;
-
-    println!("{:.3}s", mem_time.as_secs_f64());
-    println!("  Results: {} matches", response.data.result_count);
-    println!("  Cycles: {}", mem_cycles);
-    println!("  Memory Access: {}MB", response.data.memory_access / 1_000_000);
+    println!("{:.3}s", mem.elapsed.as_secs_f64());
+    println!("  Results: {} matches", mem.result_count);
+    println!("  Cycles: {}", mem.cycles);
+    println!("  Memory Access: {}MB", mem.memory_access / 1_000_000);
 
     println!("\n--- Comparison ---");
-    let speedup = cpu_time.as_secs_f64() / mem_time.as_secs_f64();
+    let speedup = cpu.elapsed.as_secs_f64() / mem.elapsed.as_secs_f64();
     println!("Network Latency Speedup: {:.2}x", speedup);
-    println!("Data Movement (local): {}MB", cpu_result.stats.data_moved / 1_000_000);
-    println!("Data Movement (remote): {}MB", response.data.data_moved / 1_000_000);
+    println!("Data Movement (local): {}MB", cpu.data_moved / 1_000_000);
+    println!("Data Movement (remote): {}MB", mem.data_moved / 1_000_000);
 
     // Export results if requested
     if let Some(path) = export_path {
@@ -232,13 +209,13 @@ async fn run_scan(
             "scan",
             "cpu",
             working_set_bytes,
-            cpu_time.as_millis(),
-            cpu_result.stats.cycles,
+            cpu.elapsed.as_millis(),
+            cpu.cycles,
             0,
             0,
             0,
-            cpu_result.stats.memory_access,
-            cpu_result.stats.data_moved,
+            cpu.memory_access,
+            cpu.data_moved,
             operations,
         );
 
@@ -246,13 +223,13 @@ async fn run_scan(
             "scan",
             "memory_engine",
             working_set_bytes,
-            mem_time.as_millis(),
-            mem_cycles,
-            response.data.instructions,
-            response.data.cache_references,
-            response.data.cache_misses,
-            response.data.memory_access,
-            response.data.data_moved,
+            mem.elapsed.as_millis(),
+            mem.cycles,
+            mem.instructions,
+            mem.cache_references,
+            mem.cache_misses,
+            mem.memory_access,
+            mem.data_moved,
             operations,
         );
 
@@ -470,7 +447,7 @@ async fn run_scan_experiment(
     let working_set_bytes = (dataset_mb as u64) * 1024 * 1024;
 
     // CPU mode
-    let cpu = ExecutionPolicy::Cpu.run_scan(buf_size, 500).await?;
+    let cpu = ExecutionPolicy::Cpu.run_scan(buf_size, "dataset", 500).await?;
     results.push(ExperimentResult::new(
         "scan",
         "cpu",
@@ -487,7 +464,7 @@ async fn run_scan_experiment(
 
     // Memory engine mode
     let remote = ExecutionPolicy::RemoteNode { address: node.to_string() };
-    match remote.run_scan(buf_size, 500).await {
+    match remote.run_scan(buf_size, "dataset", 500).await {
         Ok(mem) => {
             results.push(ExperimentResult::new(
                 "scan",
@@ -516,62 +493,41 @@ async fn run_vecadd_experiment(
     dataset_mb: usize,
 ) -> anyhow::Result<Vec<ExperimentResult>> {
     let mut results = Vec::new();
-
-    // CPU mode
-    let mut engine = MemoryEngine::new();
     let buf_size = dataset_mb * 1024 * 1024 / 4;
-    let buf_a = engine.allocate_buffer(buf_size, 100);
-    let buf_b = engine.allocate_buffer(buf_size, 200);
-
-    let start = Instant::now();
-    let cpu_result = engine.execute_cpu(Operation::MemVecAdd, &[buf_a, buf_b], &[]);
-    let cpu_time = start.elapsed();
-
     let operations = dataset_mb as u64 * 1024 * 1024 / 4;
     let working_set_bytes = (dataset_mb as u64) * 1024 * 1024;
+
+    // CPU mode
+    let cpu = ExecutionPolicy::Cpu.run_vec_add(buf_size, "dataset", "dataset").await?;
     results.push(ExperimentResult::new(
         "vector_add",
         "cpu",
         working_set_bytes,
-        cpu_time.as_millis(),
-        cpu_result.stats.cycles,
+        cpu.elapsed.as_millis(),
+        cpu.cycles,
         0,
         0,
         0,
-        cpu_result.stats.memory_access,
-        cpu_result.stats.data_moved,
+        cpu.memory_access,
+        cpu.data_moved,
         operations,
     ));
 
     // Memory engine mode
-    let cmd = Command {
-        id: Uuid::new_v4().to_string(),
-        op: MemOp::MemVecAdd {
-            buffer_a: "dataset".to_string(),
-            buffer_b: "dataset".to_string(),
-        },
-    };
-
-    let start = Instant::now();
-    match send_command(node, cmd).await {
-        Ok(response) => {
-            let mem_time = start.elapsed();
-            // Derive cycles from measured elapsed time (4 GHz CPU frequency)
-            let estimated_cpu_freq_hz = 4_000_000_000.0;
-            let mem_cycles = (mem_time.as_secs_f64() * estimated_cpu_freq_hz) as u64;
-            let operations = dataset_mb as u64 * 1024 * 1024 / 4;
-            let working_set_bytes = (dataset_mb as u64) * 1024 * 1024;
+    let remote = ExecutionPolicy::RemoteNode { address: node.to_string() };
+    match remote.run_vec_add(buf_size, "dataset", "dataset").await {
+        Ok(mem) => {
             results.push(ExperimentResult::new(
                 "vector_add",
                 "memory_engine",
                 working_set_bytes,
-                mem_time.as_millis(),
-                mem_cycles,
-                response.data.instructions,
-                response.data.cache_references,
-                response.data.cache_misses,
-                response.data.memory_access,
-                response.data.data_moved,
+                mem.elapsed.as_millis(),
+                mem.cycles,
+                mem.instructions,
+                mem.cache_references,
+                mem.cache_misses,
+                mem.memory_access,
+                mem.data_moved,
                 operations,
             ));
         }
@@ -762,67 +718,45 @@ async fn run_stride_testing_experiment(node_bin: &str, node: Option<&str>) -> an
 
     for stride in stride_values {
         println!("Running stride scan with stride={}", stride);
-        
-        // CPU mode
-        let mut engine = MemoryEngine::new();
+
         let buf_size = 256 * 1024 * 1024 / 4;
-        let buf = engine.allocate_buffer(buf_size, 0);
 
-        if let Some(buf_data) = engine.get_buffer_mut(buf) {
-            for (i, val) in buf_data.iter_mut().enumerate() {
-                *val = ((i as u32).wrapping_mul(7919)) % 1000;
-            }
-        }
-
-        let start = Instant::now();
-        let cpu_result = engine.execute_cpu(Operation::MemStrideScan, &[buf], &[stride as u32]);
-        let cpu_time = start.elapsed();
+        // CPU mode
+        let cpu = ExecutionPolicy::Cpu.run_stride_scan(buf_size, stride).await?;
 
         let operations = 256 * 1024 * 1024 / 4;
         let cpu_exp = ExperimentResult::with_stride(
             "stride_scan",
             "cpu",
             256,
-            cpu_time.as_millis(),
-            cpu_result.stats.cycles,
+            cpu.elapsed.as_millis(),
+            cpu.cycles,
             0,
             0,
             0,
-            cpu_result.stats.memory_access,
-            cpu_result.stats.data_moved,
+            cpu.memory_access,
+            cpu.data_moved,
             operations,
             stride,
         );
 
         // Memory engine mode
-        let cmd = Command {
-            id: Uuid::new_v4().to_string(),
-            op: MemOp::MemStrideScan {
-                buffer: "dataset".to_string(),
-                stride,
-            },
-        };
-
-        let start = Instant::now();
-        match send_command(node_addr, cmd).await {
-            Ok(response) => {
-                let mem_time = start.elapsed();
-                // Derive cycles from measured elapsed time (4 GHz CPU frequency)
-                let estimated_cpu_freq_hz = 4_000_000_000.0;
-                let mem_cycles = (mem_time.as_secs_f64() * estimated_cpu_freq_hz) as u64;
+        let remote = ExecutionPolicy::RemoteNode { address: node_addr.to_string() };
+        match remote.run_stride_scan(buf_size, stride).await {
+            Ok(mem) => {
                 let operations = 256 * 1024 * 1024 / 4;
                 let working_set_bytes = 256 * 1024 * 1024;
                 let mem_exp = ExperimentResult::with_stride(
                     "stride_scan",
                     "memory_engine",
                     working_set_bytes,
-                    mem_time.as_millis(),
-                    mem_cycles,
-                    response.data.instructions,
-                    response.data.cache_references,
-                    response.data.cache_misses,
-                    response.data.memory_access,
-                    response.data.data_moved,
+                    mem.elapsed.as_millis(),
+                    mem.cycles,
+                    mem.instructions,
+                    mem.cache_references,
+                    mem.cache_misses,
+                    mem.memory_access,
+                    mem.data_moved,
                     operations,
                     stride,
                 );
