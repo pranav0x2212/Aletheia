@@ -10,39 +10,19 @@ pub struct Command {
 #[serde(tag = "type")]
 pub enum MemOp {
     #[serde(rename = "MEM_COPY")]
-    MemCopy {
-        buffer: String,
-    },
+    MemCopy { buffer: String },
     #[serde(rename = "MEM_VEC_ADD")]
-    MemVecAdd {
-        buffer_a: String,
-        buffer_b: String,
-    },
+    MemVecAdd { buffer_a: String, buffer_b: String },
     #[serde(rename = "MEM_VEC_AND")]
-    MemVecAnd {
-        buffer_a: String,
-        buffer_b: String,
-    },
+    MemVecAnd { buffer_a: String, buffer_b: String },
     #[serde(rename = "MEM_VEC_OR")]
-    MemVecOr {
-        buffer_a: String,
-        buffer_b: String,
-    },
+    MemVecOr { buffer_a: String, buffer_b: String },
     #[serde(rename = "MEM_SCAN")]
-    MemScan {
-        buffer: String,
-        threshold: u32,
-    },
+    MemScan { buffer: String, threshold: u32 },
     #[serde(rename = "MEM_STRIDE_SCAN")]
-    MemStrideScan {
-        buffer: String,
-        stride: usize,
-    },
+    MemStrideScan { buffer: String, stride: usize },
     #[serde(rename = "MEM_POINTER_CHASE")]
-    MemPointerChase {
-        buffer: String,
-        iterations: usize,
-    },
+    MemPointerChase { buffer: String, iterations: usize },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
