@@ -1,4 +1,4 @@
-use crate::engine::{MemoryEngine, Operation, ExecutionResult};
+use crate::engine::{ExecutionResult, MemoryEngine, Operation};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
@@ -16,7 +16,7 @@ impl WorkingSetSweep {
 
         WorkingSetSweep {
             working_set_sizes,
-            iterations: 100_000,      // 100K iterations to reduce noise
+            iterations: 100_000,       // 100K iterations to reduce noise
             warmup_iterations: 10_000, // 10K warmup iterations
         }
     }
@@ -42,7 +42,7 @@ impl WorkingSetSweep {
     /// Get scaled iteration count based on working set size to reduce measurement noise
     /// Small sets (L1/L2): baseline, Medium (L3): 3x, Large (DRAM): 10x
     pub fn get_scaled_iterations(working_set_bytes: usize) -> usize {
-        const L2_BOUNDARY: usize = 256 * 1024;      // 256KB
+        const L2_BOUNDARY: usize = 256 * 1024; // 256KB
         const L3_BOUNDARY: usize = 4 * 1024 * 1024; // 4MB
         const L1_BASELINE: usize = 100_000;
         const L3_MULTIPLIER: usize = 3;
@@ -169,11 +169,13 @@ impl WorkingSetResult {
 
         println!("Working Set: {:>6}  {} ", size_str, cache_level);
         println!("  CPU Latency: {:.2} ns/access", self.cpu_latency_ns);
-        println!("  Memory Engine Latency: {:.2} ns/access", self.mem_latency_ns);
+        println!(
+            "  Memory Engine Latency: {:.2} ns/access",
+            self.mem_latency_ns
+        );
         println!(
             "  Latency Ratio: {:.2}x",
             self.mem_latency_ns / self.cpu_latency_ns
         );
     }
 }
-
