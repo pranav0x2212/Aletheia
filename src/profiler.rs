@@ -36,9 +36,13 @@ where
         .build_with_group(&mut group)
         .context("failed to open CACHE_MISSES counter")?;
 
-    group.enable().context("failed to enable perf event group")?;
+    group
+        .enable()
+        .context("failed to enable perf event group")?;
     let result = f();
-    group.disable().context("failed to disable perf event group")?;
+    group
+        .disable()
+        .context("failed to disable perf event group")?;
 
     let counts = group.read().context("failed to read perf event group")?;
 
