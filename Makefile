@@ -40,6 +40,8 @@
 CARGO  := cargo
 PYTHON := python3
 
+NODE_ADDR ?= 127.0.0.1:9000
+
 HOST := $(CARGO) run --bin aletheia-host --release --
 NODE := $(CARGO) run --bin aletheia-node --release
 
@@ -82,8 +84,11 @@ help:
 	@echo ""
 	@echo "Visualization:"
 	@echo "  plot-scaling  Dataset scaling plots"
-	@echo "  plot-stride   Stride scan plots"
+	@echo "  plot-stride   Generate stride scan plots"
 	@echo "  plots         Generate all plots"
+	@echo ""
+	@echo "Configuration:"
+	@echo "  NODE_ADDR     Remote node address (default: 127.0.0.1:9000)"
 
 # =============================================================================
 # Build & Development
@@ -127,32 +132,34 @@ node:
 # =============================================================================
 
 scan:
-	$(HOST) scan
+	$(HOST) --node $(NODE_ADDR) scan
 
 vecadd:
-	$(HOST) vec-add
+	$(HOST) --node $(NODE_ADDR) vec-add
 
 stride:
-	$(HOST) stride-scan
+	$(HOST) --node $(NODE_ADDR) stride-scan
 
 pointer:
-	$(HOST) pointer-chase
+	$(HOST) --node $(NODE_ADDR) pointer-chase
 
 benchmark:
-	$(HOST) benchmark
+	$(HOST) --node $(NODE_ADDR) benchmark
 
 # =============================================================================
 # Experiments
 # =============================================================================
 
 scaling:
-	$(HOST) experiment dataset-scaling
+	$(HOST) --node $(NODE_ADDR) experiment dataset-scaling
 
 strides:
-	$(HOST) experiment stride-testing
+	$(HOST) --node $(NODE_ADDR) experiment stride-testing
 
 wsweep:
-	$(HOST) experiment working-set-sweep
+	$(HOST) --node $(NODE_ADDR) experiment working-set-sweep --mode pointer
+	$(HOST) --node $(NODE_ADDR) experiment working-set-sweep --mode random
+	$(HOST) --node $(NODE_ADDR) experiment working-set-sweep --mode sequential
 
 # =============================================================================
 # Visualization

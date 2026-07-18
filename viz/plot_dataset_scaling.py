@@ -161,7 +161,7 @@ def print_summary(df):
 
 def main():
     """Main entry point."""
-    results_file = Path("results/dataset_scaling.jsonl")
+    results_file = Path("results/rpi-results/dataset_scaling.jsonl")
     output_dir = Path("viz/output")
     
     # Create output directory if it doesn't exist
@@ -170,6 +170,8 @@ def main():
     print("Reading experiment results...")
     df = load_results(results_file)
     
+    df["dataset_size_mb"] = df["working_set_bytes"] // (1024 * 1024)
+
     print_summary(df)
     
     print("Generating plots...")

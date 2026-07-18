@@ -124,7 +124,7 @@ def main():
     script_dir = Path(__file__).parent
     project_root = script_dir.parent
     
-    results_file = project_root / 'results' / 'stride_scan.jsonl'
+    results_file = project_root / 'results' / 'rpi-results' / 'stride_scan.jsonl'
     output_dir = script_dir / 'output'
 
     if not results_file.exists():

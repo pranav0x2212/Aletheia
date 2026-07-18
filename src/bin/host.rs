@@ -115,7 +115,7 @@ enum ExperimentType {
     /// Sweep working set sizes to measure cache hierarchy effects
     WorkingSetSweep {
         /// Measurement mode: "sequential" (old scan-based) or "pointer" (new pointer-chase)
-        #[arg(long, default_value = "pointer")]
+        #[arg(long)]
         mode: String,
 
         /// Run only a specific working set size (e.g. 64KB, 16MB)
@@ -391,7 +391,8 @@ async fn run_dataset_scaling_experiment(node_bin: &str, node: Option<&str>) -> a
     println!("==========================\n");
 
     let dataset_sizes = vec![64, 128, 256, 512, 1024];
-    let export_file = "results/dataset_scaling.jsonl";
+    let export_file = "results/rpi-results/dataset_scaling.jsonl";
+    let _ = std::fs::remove_file(export_file);
 
     println!("Testing dataset sizes: {:?}MB\n", dataset_sizes);
 
@@ -740,7 +741,8 @@ async fn run_stride_testing_experiment(node_bin: &str, node: Option<&str>) -> an
     println!("=========================\n");
 
     let stride_values = vec![1, 4, 16, 64, 256, 4096];
-    let export_file = "results/stride_scan.jsonl";
+    let export_file = "results/rpi-results/stride_scan.jsonl";
+    let _ = std::fs::remove_file(export_file);
 
     println!("Testing strides: {:?}\n", stride_values);
 
@@ -879,12 +881,13 @@ async fn run_working_set_sweep_experiment(mode: &str, size: Option<&str>) -> any
 
     let workload = WorkingSetSweep::new();
     let export_file = if is_pointer {
-        "results/working_set_sweep_pointer.jsonl"
+        "results/rpi-results/working_set_sweep_pointer.jsonl"
     } else if is_random {
-        "results/working_set_sweep_random.jsonl"
+        "results/rpi-results/working_set_sweep_random.jsonl"
     } else {
-        "results/working_set_sweep_sequential.jsonl"
+        "results/rpi-results/working_set_sweep_sequential.jsonl"
     };
+    let _ = std::fs::remove_file(export_file);
 
     // Cache hierarchy estimates (typical modern x86):
     // L1: 32KB, L2: 256KB, L3: 8MB
