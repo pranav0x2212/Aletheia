@@ -1,4 +1,4 @@
-use crate::engine::{MemoryEngine, Operation, ExecutionResult};
+use crate::engine::{ExecutionResult, MemoryEngine, Operation};
 
 pub struct DatasetScan {
     pub threshold: u32,
@@ -9,16 +9,8 @@ impl DatasetScan {
         DatasetScan { threshold }
     }
 
-    pub fn execute_cpu(
-        &self,
-        engine: &MemoryEngine,
-        buffer_idx: usize,
-    ) -> ExecutionResult {
-        engine.execute_cpu(
-            Operation::MemScan,
-            &[buffer_idx],
-            &[self.threshold],
-        )
+    pub fn execute_cpu(&self, engine: &MemoryEngine, buffer_idx: usize) -> ExecutionResult {
+        engine.execute_cpu(Operation::MemScan, &[buffer_idx], &[self.threshold])
     }
 
     pub fn execute_memory_engine(
@@ -26,11 +18,7 @@ impl DatasetScan {
         engine: &MemoryEngine,
         buffer_idx: usize,
     ) -> ExecutionResult {
-        engine.execute_memory_engine(
-            Operation::MemScan,
-            &[buffer_idx],
-            &[self.threshold],
-        )
+        engine.execute_memory_engine(Operation::MemScan, &[buffer_idx], &[self.threshold])
     }
 
     pub fn compare_modes(&self, engine: &MemoryEngine, buffer_idx: usize) -> ScanComparison {
@@ -61,15 +49,24 @@ impl ScanComparison {
         println!("=======================");
         println!("CPU Mode:");
         println!("  Data Moved: {} bytes", self.cpu_result.stats.data_moved);
-        println!("  Memory Access: {} bytes", self.cpu_result.stats.memory_access);
+        println!(
+            "  Memory Access: {} bytes",
+            self.cpu_result.stats.memory_access
+        );
         println!("  Cycles: {}", self.cpu_result.stats.cycles);
         println!();
         println!("Memory Engine Mode:");
         println!("  Data Moved: {} bytes", self.mem_result.stats.data_moved);
-        println!("  Memory Access: {} bytes", self.mem_result.stats.memory_access);
+        println!(
+            "  Memory Access: {} bytes",
+            self.mem_result.stats.memory_access
+        );
         println!("  Cycles: {}", self.mem_result.stats.cycles);
         println!();
         println!("Data Movement Reduction: {:.2}x", self.reduction_ratio);
-        println!("Results Match: {}", self.cpu_result.data == self.mem_result.data);
+        println!(
+            "Results Match: {}",
+            self.cpu_result.data == self.mem_result.data
+        );
     }
 }

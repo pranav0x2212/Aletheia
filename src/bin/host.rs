@@ -1,13 +1,13 @@
 use aletheia::{
     engine::{MemoryEngine, Operation},
-    protocol::{Command, MemOp},
     network::send_command,
+    protocol::{Command, MemOp},
     results::ExperimentResult,
     workloads::WorkingSetSweep,
 };
 use clap::{Parser, Subcommand};
+use std::process::{Child, Command as ProcessCommand};
 use std::time::Instant;
-use std::process::{Command as ProcessCommand, Child};
 use uuid::Uuid;
 
 use aletheia::runtime::execution_policy::ExecutionPolicy;
@@ -58,7 +58,8 @@ enum Commands {
         /// Export results to JSONL file
         #[arg(short, long)]
         export: Option<String>,
-    },    /// Run stride scan to measure memory access patterns
+    },
+    /// Run stride scan to measure memory access patterns
     StrideScan {
         /// Stride value for memory access pattern
         #[arg(long, default_value = "1")]
@@ -81,7 +82,8 @@ enum Commands {
         /// Export results to JSONL file
         #[arg(short, long)]
         export: Option<String>,
-    },    /// Run dataset scaling experiments
+    },
+    /// Run dataset scaling experiments
     Experiment {
         #[command(subcommand)]
         exp_type: ExperimentType,
@@ -131,10 +133,18 @@ async fn main() -> anyhow::Result<()> {
     println!("═══════════════════════════════════════════════════════\n");
 
     match args.command {
-        Commands::Scan { threshold, buffer, export } => {
+        Commands::Scan {
+            threshold,
+            buffer,
+            export,
+        } => {
             run_scan(&args.node, &buffer, threshold, export.as_deref()).await?;
         }
-        Commands::VecAdd { buffer_a, buffer_b, export } => {
+        Commands::VecAdd {
+            buffer_a,
+            buffer_b,
+            export,
+        } => {
             run_vec_add(&args.node, &buffer_a, &buffer_b, export.as_deref()).await?;
         }
         Commands::Benchmark { export } => {
@@ -143,22 +153,24 @@ async fn main() -> anyhow::Result<()> {
         Commands::StrideScan { stride, export } => {
             run_stride_scan(&args.node, stride, export.as_deref()).await?;
         }
-        Commands::PointerChase { iterations, buffer, export } => {
+        Commands::PointerChase {
+            iterations,
+            buffer,
+            export,
+        } => {
             run_pointer_chase(&args.node, &buffer, iterations, export.as_deref()).await?;
         }
-        Commands::Experiment { exp_type } => {
-            match exp_type {
-                ExperimentType::DatasetScaling { node_bin, node } => {
-                    run_dataset_scaling_experiment(&node_bin, node.as_deref()).await?;
-                }
-                ExperimentType::StrideTesting { node_bin, node } => {
-                    run_stride_testing_experiment(&node_bin, node.as_deref()).await?;
-                }
-                ExperimentType::WorkingSetSweep { mode , size } => {
-                    run_working_set_sweep_experiment(&mode, size.as_deref()).await?;
-                }
+        Commands::Experiment { exp_type } => match exp_type {
+            ExperimentType::DatasetScaling { node_bin, node } => {
+                run_dataset_scaling_experiment(&node_bin, node.as_deref()).await?;
             }
-        }
+            ExperimentType::StrideTesting { node_bin, node } => {
+                run_stride_testing_experiment(&node_bin, node.as_deref()).await?;
+            }
+            ExperimentType::WorkingSetSweep { mode, size } => {
+                run_working_set_sweep_experiment(&mode, size.as_deref()).await?;
+            }
+        },
     }
 
     Ok(())
@@ -177,7 +189,9 @@ async fn run_scan(
 
     // CPU mode execution (local)
     print!("CPU Mode (local execution): ");
-    let cpu = ExecutionPolicy::Cpu.run_scan(buf_size, buffer, threshold).await?;
+    let cpu = ExecutionPolicy::Cpu
+        .run_scan(buf_size, buffer, threshold)
+        .await?;
     println!("{:.3}s", cpu.elapsed.as_secs_f64());
     println!("  Results: {} matches", cpu.result_count);
     println!("  Cycles: {}", cpu.cycles);
@@ -187,7 +201,9 @@ async fn run_scan(
     println!("\nMemory Engine Mode (remote on RPi): ");
     print!("  Offloading to node... ");
 
-    let remote = ExecutionPolicy::RemoteNode { address: node.to_string() };
+    let remote = ExecutionPolicy::RemoteNode {
+        address: node.to_string(),
+    };
     let mem = remote.run_scan(buf_size, buffer, threshold).await?;
 
     println!("{:.3}s", mem.elapsed.as_secs_f64());
@@ -253,14 +269,18 @@ async fn run_vec_add(
 
     // CPU mode
     print!("CPU Mode (local execution): ");
-    let cpu = ExecutionPolicy::Cpu.run_vec_add(buf_size, buffer_a, buffer_b).await?;
+    let cpu = ExecutionPolicy::Cpu
+        .run_vec_add(buf_size, buffer_a, buffer_b)
+        .await?;
     println!("{:.3}s", cpu.elapsed.as_secs_f64());
 
     // Memory engine mode
     println!("Memory Engine Mode (remote): ");
     print!("  Offloading to node... ");
 
-    let remote = ExecutionPolicy::RemoteNode { address: node.to_string() };
+    let remote = ExecutionPolicy::RemoteNode {
+        address: node.to_string(),
+    };
     let mem = remote.run_vec_add(buf_size, buffer_a, buffer_b).await?;
     println!("{:.3}s", mem.elapsed.as_secs_f64());
 
@@ -313,12 +333,13 @@ async fn run_benchmark(node: &str, export_path: Option<&str>) -> anyhow::Result<
 
     let mut results = Vec::new();
 
-    let operations = vec![
-        ("SCAN", MemOp::MemScan {
+    let operations = vec![(
+        "SCAN",
+        MemOp::MemScan {
             buffer: "dataset".to_string(),
             threshold: 500,
-        }),
-    ];
+        },
+    )];
 
     for (name, op) in operations {
         println!("Running {}...", name);
@@ -376,7 +397,10 @@ async fn run_dataset_scaling_experiment(node_bin: &str, node: Option<&str>) -> a
 
     for dataset_mb in dataset_sizes {
         println!("╔══════════════════════════════════════╗");
-        println!("║  Dataset Size: {}MB", format!("{:>5}", dataset_mb).trim_end());
+        println!(
+            "║  Dataset Size: {}MB",
+            format!("{:>5}", dataset_mb).trim_end()
+        );
         println!("╚══════════════════════════════════════╝");
 
         // Start node with this dataset size (unless an existing remote node was supplied)
@@ -393,7 +417,7 @@ async fn run_dataset_scaling_experiment(node_bin: &str, node: Option<&str>) -> a
         // Run scan workload
         println!("\n  Running scan...");
         let scan_results = run_scan_experiment(node_addr, dataset_mb).await?;
-        
+
         // Run vec-add workload
         println!("\n  Running vector-add...");
         let vecadd_results = run_vecadd_experiment(node_addr, dataset_mb).await?;
@@ -447,7 +471,9 @@ async fn run_scan_experiment(
     let working_set_bytes = (dataset_mb as u64) * 1024 * 1024;
 
     // CPU mode
-    let cpu = ExecutionPolicy::Cpu.run_scan(buf_size, "dataset", 500).await?;
+    let cpu = ExecutionPolicy::Cpu
+        .run_scan(buf_size, "dataset", 500)
+        .await?;
     results.push(ExperimentResult::new(
         "scan",
         "cpu",
@@ -463,7 +489,9 @@ async fn run_scan_experiment(
     ));
 
     // Memory engine mode
-    let remote = ExecutionPolicy::RemoteNode { address: node.to_string() };
+    let remote = ExecutionPolicy::RemoteNode {
+        address: node.to_string(),
+    };
     match remote.run_scan(buf_size, "dataset", 500).await {
         Ok(mem) => {
             results.push(ExperimentResult::new(
@@ -498,7 +526,9 @@ async fn run_vecadd_experiment(
     let working_set_bytes = (dataset_mb as u64) * 1024 * 1024;
 
     // CPU mode
-    let cpu = ExecutionPolicy::Cpu.run_vec_add(buf_size, "dataset", "dataset").await?;
+    let cpu = ExecutionPolicy::Cpu
+        .run_vec_add(buf_size, "dataset", "dataset")
+        .await?;
     results.push(ExperimentResult::new(
         "vector_add",
         "cpu",
@@ -514,7 +544,9 @@ async fn run_vecadd_experiment(
     ));
 
     // Memory engine mode
-    let remote = ExecutionPolicy::RemoteNode { address: node.to_string() };
+    let remote = ExecutionPolicy::RemoteNode {
+        address: node.to_string(),
+    };
     match remote.run_vec_add(buf_size, "dataset", "dataset").await {
         Ok(mem) => {
             results.push(ExperimentResult::new(
@@ -553,7 +585,9 @@ async fn run_stride_scan(
 
     // CPU mode
     print!("CPU Mode (stride={}): ", stride);
-    let cpu = ExecutionPolicy::Cpu.run_stride_scan(buf_size, stride).await?;
+    let cpu = ExecutionPolicy::Cpu
+        .run_stride_scan(buf_size, stride)
+        .await?;
     println!("{:.3}s", cpu.elapsed.as_secs_f64());
     println!("  Elements accessed: {}", cpu.result_count);
     println!("  Cycles: {}", cpu.cycles);
@@ -579,7 +613,9 @@ async fn run_stride_scan(
     println!("\nMemory Engine Mode (stride={}): ", stride);
     print!("  Offloading to node... ");
 
-    let remote = ExecutionPolicy::RemoteNode { address: node.to_string() };
+    let remote = ExecutionPolicy::RemoteNode {
+        address: node.to_string(),
+    };
     let mem = remote.run_stride_scan(buf_size, stride).await?;
 
     println!("{:.3}s", mem.elapsed.as_secs_f64());
@@ -642,8 +678,12 @@ async fn run_pointer_chase(
     println!("\nMemory Engine Mode (iterations={}): ", iterations);
     print!("  Offloading to node... ");
 
-    let remote = ExecutionPolicy::RemoteNode { address: node.to_string() };
-    let mem = remote.run_pointer_chase(buf_size, buffer, iterations).await?;
+    let remote = ExecutionPolicy::RemoteNode {
+        address: node.to_string(),
+    };
+    let mem = remote
+        .run_pointer_chase(buf_size, buffer, iterations)
+        .await?;
 
     println!("{:.3}s", mem.elapsed.as_secs_f64());
     println!("  Accesses: {}", mem.result_count);
@@ -651,8 +691,7 @@ async fn run_pointer_chase(
 
     println!("\n--- Memory Latency Analysis ---");
     let speedup = cpu.elapsed.as_secs_f64() / mem.elapsed.as_secs_f64();
-    let latency_reduction = ((cpu.cycles as f64 - mem.cycles as f64)
-        / cpu.cycles as f64) * 100.0;
+    let latency_reduction = ((cpu.cycles as f64 - mem.cycles as f64) / cpu.cycles as f64) * 100.0;
     println!("Speedup: {:.2}x", speedup);
     println!("Latency Reduction: {:.2}%", latency_reduction);
     println!("Note: Pointer chasing reveals true memory dependency latency");
@@ -722,7 +761,9 @@ async fn run_stride_testing_experiment(node_bin: &str, node: Option<&str>) -> an
         let buf_size = 256 * 1024 * 1024 / 4;
 
         // CPU mode
-        let cpu = ExecutionPolicy::Cpu.run_stride_scan(buf_size, stride).await?;
+        let cpu = ExecutionPolicy::Cpu
+            .run_stride_scan(buf_size, stride)
+            .await?;
 
         let operations = 256 * 1024 * 1024 / 4;
         let cpu_exp = ExperimentResult::with_stride(
@@ -741,7 +782,9 @@ async fn run_stride_testing_experiment(node_bin: &str, node: Option<&str>) -> an
         );
 
         // Memory engine mode
-        let remote = ExecutionPolicy::RemoteNode { address: node_addr.to_string() };
+        let remote = ExecutionPolicy::RemoteNode {
+            address: node_addr.to_string(),
+        };
         match remote.run_stride_scan(buf_size, stride).await {
             Ok(mem) => {
                 let operations = 256 * 1024 * 1024 / 4;
@@ -801,9 +844,12 @@ async fn run_working_set_sweep_experiment(mode: &str, size: Option<&str>) -> any
     let is_pointer = mode == "pointer";
     let is_sequential = mode == "sequential";
     let is_random = mode == "random";
-    
+
     if !is_pointer && !is_sequential && !is_random {
-        anyhow::bail!("Invalid mode: '{}'. Use 'pointer', 'sequential', or 'random'", mode);
+        anyhow::bail!(
+            "Invalid mode: '{}'. Use 'pointer', 'sequential', or 'random'",
+            mode
+        );
     }
 
     let title = if is_pointer {
@@ -813,10 +859,10 @@ async fn run_working_set_sweep_experiment(mode: &str, size: Option<&str>) -> any
     } else {
         "Working Set Sweep Experiment (Sequential Scan)"
     };
-    
+
     println!("{}", title);
     println!("{}\n", "=".repeat(title.len()));
-    
+
     if is_pointer {
         println!("Measuring memory latency by defeating prefetching\n");
         println!("Method: Randomized dependent pointer chasing");
@@ -866,7 +912,7 @@ async fn run_working_set_sweep_experiment(mode: &str, size: Option<&str>) -> any
         None => workload.working_set_sizes.clone(),
     };
 
-    for working_set_bytes in & working_set_sizes {
+    for working_set_bytes in &working_set_sizes {
         let size_kb = working_set_bytes / 1024;
         let size_mb = working_set_bytes / (1024 * 1024);
 
@@ -889,15 +935,13 @@ async fn run_working_set_sweep_experiment(mode: &str, size: Option<&str>) -> any
 
         print!("Working Set: {:>6}  {} ", size_str, cache_level);
         std::io::Write::flush(&mut std::io::stdout()).ok();
-        let iterations =
-            WorkingSetSweep::get_scaled_iterations(*working_set_bytes);
-            
+        let iterations = WorkingSetSweep::get_scaled_iterations(*working_set_bytes);
+
         let warmup_iterations = iterations / 10;
-        
 
         if is_pointer {
             // ===== POINTER CHASING MODE =====
-            
+
             // CPU mode with pointer chasing
             let mut engine = MemoryEngine::new();
             let buf_size = working_set_bytes / 4; // u32 is 4 bytes
@@ -923,7 +967,8 @@ async fn run_working_set_sweep_experiment(mode: &str, size: Option<&str>) -> any
             let cpu_result =
                 engine.execute_cpu(Operation::MemPointerChase, &[buf], &[iterations as u32]);
             let cpu_time = start.elapsed();
-            let cpu_latency_ns = WorkingSetSweep::calculate_latency_ns(cpu_time.as_nanos(), iterations);
+            let cpu_latency_ns =
+                WorkingSetSweep::calculate_latency_ns(cpu_time.as_nanos(), iterations);
 
             // Memory engine mode with pointer chasing
             let mut engine = MemoryEngine::new();
@@ -951,9 +996,13 @@ async fn run_working_set_sweep_experiment(mode: &str, size: Option<&str>) -> any
                 &[iterations as u32],
             );
             let mem_time = start.elapsed();
-            let mem_latency_ns = WorkingSetSweep::calculate_latency_ns(mem_time.as_nanos(), iterations);
+            let mem_latency_ns =
+                WorkingSetSweep::calculate_latency_ns(mem_time.as_nanos(), iterations);
 
-            print!("CPU: {:.2} ns/access | ME: {:.2} ns/access\n", cpu_latency_ns, mem_latency_ns);
+            print!(
+                "CPU: {:.2} ns/access | ME: {:.2} ns/access\n",
+                cpu_latency_ns, mem_latency_ns
+            );
 
             // Store results with exact working set size in bytes (no rounding)
             let cpu_exp = ExperimentResult::new(
@@ -968,7 +1017,8 @@ async fn run_working_set_sweep_experiment(mode: &str, size: Option<&str>) -> any
                 cpu_result.stats.memory_access,
                 cpu_result.stats.data_moved,
                 iterations as u64,
-            ).with_latency(cpu_latency_ns);
+            )
+            .with_latency(cpu_latency_ns);
 
             let mem_exp = ExperimentResult::new(
                 "working_set_sweep",
@@ -982,13 +1032,14 @@ async fn run_working_set_sweep_experiment(mode: &str, size: Option<&str>) -> any
                 mem_result.stats.memory_access,
                 mem_result.stats.data_moved,
                 iterations as u64,
-            ).with_latency(mem_latency_ns);
+            )
+            .with_latency(mem_latency_ns);
 
             all_results.push(cpu_exp);
             all_results.push(mem_exp);
         } else if is_sequential {
             // ===== SEQUENTIAL SCAN MODE =======
-            
+
             // CPU mode with sequential scan
             let mut engine = MemoryEngine::new();
             let buf_size = working_set_bytes / 4; // u32 is 4 bytes
@@ -1012,7 +1063,8 @@ async fn run_working_set_sweep_experiment(mode: &str, size: Option<&str>) -> any
             let start = Instant::now();
             let cpu_result = engine.execute_cpu(Operation::MemScan, &[buf], &[500]);
             let cpu_time = start.elapsed();
-            let cpu_latency_ns = WorkingSetSweep::calculate_latency_ns(cpu_time.as_nanos(), iterations);
+            let cpu_latency_ns =
+                WorkingSetSweep::calculate_latency_ns(cpu_time.as_nanos(), iterations);
 
             // Memory engine mode with sequential scan
             let mut engine = MemoryEngine::new();
@@ -1032,9 +1084,13 @@ async fn run_working_set_sweep_experiment(mode: &str, size: Option<&str>) -> any
             let start = Instant::now();
             let mem_result = engine.execute_memory_engine(Operation::MemScan, &[buf], &[500]);
             let mem_time = start.elapsed();
-            let mem_latency_ns = WorkingSetSweep::calculate_latency_ns(mem_time.as_nanos(), iterations);
+            let mem_latency_ns =
+                WorkingSetSweep::calculate_latency_ns(mem_time.as_nanos(), iterations);
 
-            print!("CPU: {:.2} ns/access | ME: {:.2} ns/access\n", cpu_latency_ns, mem_latency_ns);
+            print!(
+                "CPU: {:.2} ns/access | ME: {:.2} ns/access\n",
+                cpu_latency_ns, mem_latency_ns
+            );
 
             // Store results with exact working set size in bytes (no rounding)
             let cpu_exp = ExperimentResult::new(
@@ -1049,7 +1105,8 @@ async fn run_working_set_sweep_experiment(mode: &str, size: Option<&str>) -> any
                 cpu_result.stats.memory_access,
                 cpu_result.stats.data_moved,
                 iterations as u64,
-            ).with_latency(cpu_latency_ns);
+            )
+            .with_latency(cpu_latency_ns);
 
             let mem_exp = ExperimentResult::new(
                 "working_set_sweep",
@@ -1063,13 +1120,14 @@ async fn run_working_set_sweep_experiment(mode: &str, size: Option<&str>) -> any
                 mem_result.stats.memory_access,
                 mem_result.stats.data_moved,
                 iterations as u64,
-            ).with_latency(mem_latency_ns);
+            )
+            .with_latency(mem_latency_ns);
 
             all_results.push(cpu_exp);
             all_results.push(mem_exp);
         } else if is_random {
             // ===== INDEPENDENT RANDOM ACCESS MODE =====
-            
+
             // CPU mode with random access
             let mut engine = MemoryEngine::new();
             let buf_size = working_set_bytes / 4; // u32 is 4 bytes
@@ -1095,7 +1153,8 @@ async fn run_working_set_sweep_experiment(mode: &str, size: Option<&str>) -> any
             let cpu_result =
                 engine.execute_cpu(Operation::MemRandomAccess, &[buf], &[iterations as u32]);
             let cpu_time = start.elapsed();
-            let cpu_latency_ns = WorkingSetSweep::calculate_latency_ns(cpu_time.as_nanos(), iterations);
+            let cpu_latency_ns =
+                WorkingSetSweep::calculate_latency_ns(cpu_time.as_nanos(), iterations);
 
             // Memory engine mode with random access
             let mut engine = MemoryEngine::new();
@@ -1123,9 +1182,13 @@ async fn run_working_set_sweep_experiment(mode: &str, size: Option<&str>) -> any
                 &[iterations as u32],
             );
             let mem_time = start.elapsed();
-            let mem_latency_ns = WorkingSetSweep::calculate_latency_ns(mem_time.as_nanos(), iterations);
+            let mem_latency_ns =
+                WorkingSetSweep::calculate_latency_ns(mem_time.as_nanos(), iterations);
 
-            print!("CPU: {:.2} ns/access | ME: {:.2} ns/access\n", cpu_latency_ns, mem_latency_ns);
+            print!(
+                "CPU: {:.2} ns/access | ME: {:.2} ns/access\n",
+                cpu_latency_ns, mem_latency_ns
+            );
 
             // Store results with exact working set size in bytes (no rounding)
             let cpu_exp = ExperimentResult::new(
@@ -1140,7 +1203,8 @@ async fn run_working_set_sweep_experiment(mode: &str, size: Option<&str>) -> any
                 cpu_result.stats.memory_access,
                 cpu_result.stats.data_moved,
                 iterations as u64,
-            ).with_latency(cpu_latency_ns);
+            )
+            .with_latency(cpu_latency_ns);
 
             let mem_exp = ExperimentResult::new(
                 "working_set_sweep",
@@ -1154,7 +1218,8 @@ async fn run_working_set_sweep_experiment(mode: &str, size: Option<&str>) -> any
                 mem_result.stats.memory_access,
                 mem_result.stats.data_moved,
                 iterations as u64,
-            ).with_latency(mem_latency_ns);
+            )
+            .with_latency(mem_latency_ns);
 
             all_results.push(cpu_exp);
             all_results.push(mem_exp);
@@ -1167,7 +1232,7 @@ async fn run_working_set_sweep_experiment(mode: &str, size: Option<&str>) -> any
     println!("\n─────────────────────────────────────────────────────────");
     println!("\n✓ Working set sweep experiment completed!");
     println!("✓ Results saved to {}", export_file);
-    
+
     if is_pointer {
         println!("\nExpected results (pointer chasing):");
         println!("  • Low latency within L1 cache (~4 ns/access)");
@@ -1191,6 +1256,6 @@ async fn run_working_set_sweep_experiment(mode: &str, size: Option<&str>) -> any
         println!("\nNote: Sequential access enables hardware prefetching and");
         println!("      bandwidth optimization, masking true latency.");
     }
-    
+
     Ok(())
 }

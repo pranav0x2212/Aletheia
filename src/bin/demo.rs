@@ -1,5 +1,5 @@
-use aletheia::workloads::{DatasetScan, VectorAdd};
 use aletheia::runtime::Executor;
+use aletheia::workloads::{DatasetScan, VectorAdd};
 
 fn main() {
     println!("═══════════════════════════════════════════════════════");
@@ -24,8 +24,11 @@ fn main() {
     }
 
     println!("Test Setup:");
-    println!("  Buffer Size: {} elements ({} MB each)", 
-             BUFFER_SIZE, BUFFER_SIZE * 4 / 1_000_000);
+    println!(
+        "  Buffer Size: {} elements ({} MB each)",
+        BUFFER_SIZE,
+        BUFFER_SIZE * 4 / 1_000_000
+    );
     println!("  Operations: vector operations and dataset scan\n");
 
     // Demonstration 1: Vector Add

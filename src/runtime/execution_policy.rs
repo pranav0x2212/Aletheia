@@ -26,7 +26,12 @@ pub struct PolicyResult {
 }
 
 impl ExecutionPolicy {
-    pub async fn run_scan(&self, buf_size: usize, buffer: &str, threshold: u32) -> Result<PolicyResult> {
+    pub async fn run_scan(
+        &self,
+        buf_size: usize,
+        buffer: &str,
+        threshold: u32,
+    ) -> Result<PolicyResult> {
         match self {
             ExecutionPolicy::Cpu => {
                 let mut engine = MemoryEngine::new();
@@ -216,8 +221,8 @@ impl ExecutionPolicy {
                 // Initialize pointer chain (each element points to next in chain)
                 if let Some(buf_data) = engine.get_buffer_mut(buf) {
                     for (i, value) in buf_data.iter_mut().enumerate().take(buf_size) {
-                        let next =
-                            ((i as u32).wrapping_mul(12345).wrapping_add(67890)) % (buf_size as u32);
+                        let next = ((i as u32).wrapping_mul(12345).wrapping_add(67890))
+                            % (buf_size as u32);
                         *value = next;
                     }
                 }

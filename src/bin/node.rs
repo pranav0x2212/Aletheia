@@ -1,8 +1,8 @@
 use aletheia::{
-    engine::{MemoryEngine, Operation, ExecutionResult},
-    protocol::{Command, Response, ResponseStatus, ResponseData, MemOp},
+    engine::{ExecutionResult, MemoryEngine, Operation},
     network::listen_and_serve,
     profiler::{self, HardwareCounters},
+    protocol::{Command, MemOp, Response, ResponseData, ResponseStatus},
 };
 use clap::Parser;
 use std::collections::HashMap;
@@ -30,7 +30,7 @@ async fn main() -> anyhow::Result<()> {
 
     println!("Initializing memory engine...");
     let dataset_size = args.dataset_size * 1024 * 1024 / 4; // Convert MB to u32 elements
-    
+
     let buf_dataset = engine.allocate_buffer(dataset_size, 0);
 
     if let Some(buf) = engine.get_buffer_mut(buf_dataset) {
@@ -66,10 +66,9 @@ fn execute_with_profiling(
 ) -> Result<(ExecutionResult, HardwareCounters), String> {
     let engine_lock = engine.lock().unwrap();
 
-    let (result, counters) = profiler::measure(|| {
-        engine_lock.execute_memory_engine(op, buffer_indices, params)
-    })
-    .map_err(|e| e.to_string())?;
+    let (result, counters) =
+        profiler::measure(|| engine_lock.execute_memory_engine(op, buffer_indices, params))
+            .map_err(|e| e.to_string())?;
 
     Ok((result, counters))
 }
@@ -92,7 +91,7 @@ fn handle_command(
     };
 
     println!("[INFO] Executing {}", op_name);
-    
+
     let result = match cmd.op {
         MemOp::MemCopy { buffer } => {
             let buffers_lock = buffers.lock().unwrap();
@@ -155,12 +154,7 @@ fn handle_command(
             let buffers_lock = buffers.lock().unwrap();
             if let Some(&(idx, _)) = buffers_lock.get(&buffer) {
                 drop(buffers_lock);
-                execute_with_profiling(
-                    engine,
-                    Operation::MemStrideScan,
-                    &[idx],
-                    &[stride as u32],
-                )
+                execute_with_profiling(engine, Operation::MemStrideScan, &[idx], &[stride as u32])
             } else {
                 Err(format!("Buffer not found: {}", buffer))
             }
@@ -203,10 +197,10 @@ fn handle_command(
                     exec_result.data.len(),
                 ),
             }
-        },
+        }
         Err(e) => {
             println!("[ERROR] {} failed: {}", op_name, e);
-        
+
             Response {
                 id: cmd.id,
                 status: ResponseStatus::Error,

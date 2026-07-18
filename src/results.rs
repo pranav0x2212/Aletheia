@@ -1,13 +1,13 @@
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
-use anyhow::Result;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExperimentResult {
     pub experiment: String,
-    pub mode: String,            // "cpu" or "memory_engine"
+    pub mode: String, // "cpu" or "memory_engine"
     pub working_set_bytes: u64,
     pub runtime_ms: u128,
     pub cycles: u64,
@@ -114,21 +114,18 @@ impl ExperimentResult {
     /// Append this result to a JSONL file
     pub fn append_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let json_line = self.to_json_line()?;
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)?;
+        let mut file = OpenOptions::new().create(true).append(true).open(path)?;
         writeln!(file, "{}", json_line)?;
         Ok(())
     }
 
     /// Append multiple results to a JSONL file
-    pub fn append_batch_to_file<P: AsRef<Path>>(results: &[ExperimentResult], path: P) -> Result<()> {
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)?;
-        
+    pub fn append_batch_to_file<P: AsRef<Path>>(
+        results: &[ExperimentResult],
+        path: P,
+    ) -> Result<()> {
+        let mut file = OpenOptions::new().create(true).append(true).open(path)?;
+
         for result in results {
             let json_line = result.to_json_line()?;
             writeln!(file, "{}", json_line)?;
@@ -145,7 +142,19 @@ mod tests {
     fn test_experiment_result_serialization() {
         let operations = 256 * 1024 * 1024 / 4;
         let working_set_bytes = 256 * 1024 * 1024;
-        let result = ExperimentResult::new("scan", "cpu", working_set_bytes, 92, 121241, 0, 0, 0, 268000000, 133000000, operations);
+        let result = ExperimentResult::new(
+            "scan",
+            "cpu",
+            working_set_bytes,
+            92,
+            121241,
+            0,
+            0,
+            0,
+            268000000,
+            133000000,
+            operations,
+        );
         let json = result.to_json_line().unwrap();
         assert!(json.contains("\"experiment\":\"scan\""));
         assert!(json.contains("\"mode\":\"cpu\""));

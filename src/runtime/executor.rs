@@ -36,7 +36,9 @@ impl Executor {
         params: &[u32],
     ) -> BenchmarkResult {
         let cpu_result = self.engine.execute_cpu(operation, buffer_indices, params);
-        let mem_result = self.engine.execute_memory_engine(operation, buffer_indices, params);
+        let mem_result = self
+            .engine
+            .execute_memory_engine(operation, buffer_indices, params);
 
         let speedup = if mem_result.stats.cycles > 0 {
             (cpu_result.stats.cycles as f64) / (mem_result.stats.cycles as f64)
@@ -101,16 +103,20 @@ impl Executor {
     }
 
     pub fn print_benchmark_summary(&self, results: &[BenchmarkResult]) {
-        println!("\n{:<15} {:<12} {:<12} {:<10} {:<15}", 
-                 "Operation", "CPU Cycles", "Mem Cycles", "Speedup", "Data Reduction");
+        println!(
+            "\n{:<15} {:<12} {:<12} {:<10} {:<15}",
+            "Operation", "CPU Cycles", "Mem Cycles", "Speedup", "Data Reduction"
+        );
         println!("{}", "=".repeat(70));
         for result in results {
-            println!("{:<15} {:<12} {:<12} {:<10.2}x {:<15.2}x",
-                     result.name,
-                     result.cpu_cycles,
-                     result.mem_cycles,
-                     result.speedup,
-                     result.data_reduction);
+            println!(
+                "{:<15} {:<12} {:<12} {:<10.2}x {:<15.2}x",
+                result.name,
+                result.cpu_cycles,
+                result.mem_cycles,
+                result.speedup,
+                result.data_reduction
+            );
         }
     }
 }
