@@ -392,6 +392,7 @@ async fn run_dataset_scaling_experiment(node_bin: &str, node: Option<&str>) -> a
 
     let dataset_sizes = vec![64, 128, 256, 512, 1024];
     let export_file = "results/rpi-results/dataset_scaling.jsonl";
+    let _ = std::fs::remove_file(export_file);
 
     println!("Testing dataset sizes: {:?}MB\n", dataset_sizes);
 
@@ -741,6 +742,7 @@ async fn run_stride_testing_experiment(node_bin: &str, node: Option<&str>) -> an
 
     let stride_values = vec![1, 4, 16, 64, 256, 4096];
     let export_file = "results/rpi-results/stride_scan.jsonl";
+    let _ = std::fs::remove_file(export_file);
 
     println!("Testing strides: {:?}\n", stride_values);
 
@@ -885,6 +887,7 @@ async fn run_working_set_sweep_experiment(mode: &str, size: Option<&str>) -> any
     } else {
         "results/rpi-results/working_set_sweep_sequential.jsonl"
     };
+    let _ = std::fs::remove_file(export_file);
 
     // Cache hierarchy estimates (typical modern x86):
     // L1: 32KB, L2: 256KB, L3: 8MB
