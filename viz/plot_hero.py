@@ -177,7 +177,7 @@ class HeroPlot:
 
 def main():
     """Main entry point."""
-    results_dir = Path('results')
+    results_dir = Path('results/rpi-results')
     seq_file = results_dir / 'working_set_sweep_sequential.jsonl'
     rand_file = results_dir / 'working_set_sweep_random.jsonl'
     ptr_file = results_dir / 'working_set_sweep_pointer.jsonl'
