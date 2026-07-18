@@ -1,18 +1,10 @@
-use crate::engine::{MemoryEngine, Operation, ExecutionResult};
+use crate::engine::{ExecutionResult, MemoryEngine, Operation};
 
 pub struct VectorAdd;
 
 impl VectorAdd {
-    pub fn execute_cpu(
-        engine: &MemoryEngine,
-        buffer_a: usize,
-        buffer_b: usize,
-    ) -> ExecutionResult {
-        engine.execute_cpu(
-            Operation::MemVecAdd,
-            &[buffer_a, buffer_b],
-            &[],
-        )
+    pub fn execute_cpu(engine: &MemoryEngine, buffer_a: usize, buffer_b: usize) -> ExecutionResult {
+        engine.execute_cpu(Operation::MemVecAdd, &[buffer_a, buffer_b], &[])
     }
 
     pub fn execute_memory_engine(
@@ -20,11 +12,7 @@ impl VectorAdd {
         buffer_a: usize,
         buffer_b: usize,
     ) -> ExecutionResult {
-        engine.execute_memory_engine(
-            Operation::MemVecAdd,
-            &[buffer_a, buffer_b],
-            &[],
-        )
+        engine.execute_memory_engine(Operation::MemVecAdd, &[buffer_a, buffer_b], &[])
     }
 
     pub fn compare_modes(
@@ -59,15 +47,24 @@ impl VectorAddComparison {
         println!("====================");
         println!("CPU Mode:");
         println!("  Data Moved: {} bytes", self.cpu_result.stats.data_moved);
-        println!("  Memory Access: {} bytes", self.cpu_result.stats.memory_access);
+        println!(
+            "  Memory Access: {} bytes",
+            self.cpu_result.stats.memory_access
+        );
         println!("  Cycles: {}", self.cpu_result.stats.cycles);
         println!();
         println!("Memory Engine Mode:");
         println!("  Data Moved: {} bytes", self.mem_result.stats.data_moved);
-        println!("  Memory Access: {} bytes", self.mem_result.stats.memory_access);
+        println!(
+            "  Memory Access: {} bytes",
+            self.mem_result.stats.memory_access
+        );
         println!("  Cycles: {}", self.mem_result.stats.cycles);
         println!();
         println!("Speedup: {:.2}x", self.speedup);
-        println!("Results Match: {}", self.cpu_result.data == self.mem_result.data);
+        println!(
+            "Results Match: {}",
+            self.cpu_result.data == self.mem_result.data
+        );
     }
 }
