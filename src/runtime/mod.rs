@@ -1,3 +1,3 @@
-pub mod executor;
 pub mod execution_policy;
-pub use executor::{Executor, BenchmarkResult};
+pub mod executor;
+pub use executor::{BenchmarkResult, Executor};
