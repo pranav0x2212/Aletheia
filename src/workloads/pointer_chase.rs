@@ -1,4 +1,4 @@
-use crate::engine::{MemoryEngine, Operation, ExecutionResult};
+use crate::engine::{ExecutionResult, MemoryEngine, Operation};
 
 pub struct PointerChase {
     pub iterations: usize,
@@ -13,7 +13,7 @@ impl PointerChase {
     /// Each element points to the next, forming a linked list pattern
     pub fn init_pointer_chain(engine: &mut MemoryEngine, size: usize, seed: u32) -> usize {
         let buf = engine.allocate_buffer(size, 0);
-        
+
         if let Some(buf_data) = engine.get_buffer_mut(buf) {
             // Create a shuffled pointer chain: each element i points to some next index
             // Using a pseudorandom permutation for cache-unfriendly access pattern
@@ -22,15 +22,11 @@ impl PointerChase {
                 buf_data[i] = next;
             }
         }
-        
+
         buf
     }
 
-    pub fn execute_cpu(
-        &self,
-        engine: &MemoryEngine,
-        buffer: usize,
-    ) -> ExecutionResult {
+    pub fn execute_cpu(&self, engine: &MemoryEngine, buffer: usize) -> ExecutionResult {
         engine.execute_cpu(
             Operation::MemPointerChase,
             &[buffer],
@@ -38,11 +34,7 @@ impl PointerChase {
         )
     }
 
-    pub fn execute_memory_engine(
-        &self,
-        engine: &MemoryEngine,
-        buffer: usize,
-    ) -> ExecutionResult {
+    pub fn execute_memory_engine(&self, engine: &MemoryEngine, buffer: usize) -> ExecutionResult {
         engine.execute_memory_engine(
             Operation::MemPointerChase,
             &[buffer],
@@ -50,11 +42,7 @@ impl PointerChase {
         )
     }
 
-    pub fn compare_modes(
-        &self,
-        engine: &MemoryEngine,
-        buffer: usize,
-    ) -> PointerChaseComparison {
+    pub fn compare_modes(&self, engine: &MemoryEngine, buffer: usize) -> PointerChaseComparison {
         let cpu_result = self.execute_cpu(engine, buffer);
         let mem_result = self.execute_memory_engine(engine, buffer);
 
@@ -68,7 +56,8 @@ impl PointerChase {
             },
             latency_reduction: if cpu_result.stats.cycles > 0 {
                 ((cpu_result.stats.cycles as f64 - mem_result.stats.cycles as f64)
-                    / cpu_result.stats.cycles as f64) * 100.0
+                    / cpu_result.stats.cycles as f64)
+                    * 100.0
             } else {
                 0.0
             },
@@ -89,12 +78,18 @@ impl PointerChaseComparison {
         println!("========================");
         println!("CPU Mode:");
         println!("  Data Moved: {} bytes", self.cpu_result.stats.data_moved);
-        println!("  Memory Access: {} bytes", self.cpu_result.stats.memory_access);
+        println!(
+            "  Memory Access: {} bytes",
+            self.cpu_result.stats.memory_access
+        );
         println!("  Cycles: {}", self.cpu_result.stats.cycles);
         println!();
         println!("Memory Engine Mode:");
         println!("  Data Moved: {} bytes", self.mem_result.stats.data_moved);
-        println!("  Memory Access: {} bytes", self.mem_result.stats.memory_access);
+        println!(
+            "  Memory Access: {} bytes",
+            self.mem_result.stats.memory_access
+        );
         println!("  Cycles: {}", self.mem_result.stats.cycles);
         println!();
         println!("Speedup: {:.2}x", self.speedup);
