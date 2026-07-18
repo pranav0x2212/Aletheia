@@ -1,110 +1,167 @@
 # =============================================================================
 # Aletheia Makefile - Memory Engine Benchmarking Framework
 # =============================================================================
-# 
-# Build & Development:
-#   build              - Build project in debug mode
-#   release            - Build project in release mode (optimized)
-#   check              - Run cargo check (fast compilation check)
-#   test               - Run all tests
-#   clean              - Remove all build artifacts
-#   dev                - Quick development cycle (check + test)
 #
-# Run System:
-#   host               - Run the host CLI client
-#   node               - Run the memory engine server node
+# Build & Development
+#   build      Build project in debug mode
+#   release    Build project in release mode (optimized)
+#   check      Run cargo check
+#   fmt        Format source code
+#   lint       Run Clippy lints
+#   test       Run all tests
+#   clean      Remove build artifacts
+#   dev        Format, check and test
 #
-# Experiments:
-#   scan               - Run scan workload on host
-#   vecadd             - Run vector-add workload on host
-#   stride             - Run stride-scan memory access pattern test
-#   pointer            - Run pointer-chase latency measurement workload
-#   wsweep             - Run working-set-sweep cache hierarchy measurement
-#   benchmark          - Run full benchmark suite
+# Runtime
+#   host       Run the host CLI client
+#   node       Run the memory engine server
 #
-# Visualization:
-#   plot-scaling       - Generate dataset scaling performance plots
-#   plot-stride        - Generate stride effect performance plots
+# Workloads
+#   scan       Run memory scan workload
+#   vecadd     Run vector addition workload
+#   stride     Run stride scan workload
+#   pointer    Run pointer chase workload
+#   benchmark  Run comparative benchmark
+#
+# Experiments
+#   scaling    Run dataset scaling experiment
+#   strides    Run stride testing experiment
+#   wsweep     Run working-set sweep experiment
+#
+# Visualization
+#   plot-scaling  Generate dataset scaling plots
+#   plot-stride   Generate stride scan plots
+#   plots         Generate all plots
 #
 # =============================================================================
 
-.PHONY: help build release check test clean dev host node scan vecadd stride pointer wsweep benchmark plot-scaling plot-stride
+.DEFAULT_GOAL := help
 
-# Default target
+CARGO  := cargo
+PYTHON := python3
+
+HOST := $(CARGO) run --bin aletheia-host --release --
+NODE := $(CARGO) run --bin aletheia-node --release
+
+.PHONY: \
+	help \
+	build release check fmt lint test clean dev \
+	host node \
+	scan vecadd stride pointer benchmark \
+	scaling strides wsweep \
+	plot-scaling plot-stride plots
+
 help:
-	@echo "Aletheia Makefile - Available targets:"
+	@echo "Aletheia - Available targets"
 	@echo ""
 	@echo "Build & Development:"
-	@echo "  make build         - Build project in debug mode"
-	@echo "  make release       - Build project in release mode"
-	@echo "  make check         - Run cargo check"
-	@echo "  make test          - Run tests"
-	@echo "  make clean         - Clean build artifacts"
-	@echo "  make dev           - Run check + test"
+	@echo "  build         Build project"
+	@echo "  release       Build optimized binaries"
+	@echo "  check         Run cargo check"
+	@echo "  fmt           Format source code"
+	@echo "  lint          Run Clippy"
+	@echo "  test          Run tests"
+	@echo "  clean         Remove build artifacts"
+	@echo "  dev           Format, check and test"
 	@echo ""
-	@echo "Run System:"
-	@echo "  make host          - Run host binary"
-	@echo "  make node          - Run node binary"
+	@echo "Runtime:"
+	@echo "  host          Run host client"
+	@echo "  node          Run memory node"
+	@echo ""
+	@echo "Workloads:"
+	@echo "  scan          Memory scan"
+	@echo "  vecadd        Vector addition"
+	@echo "  stride        Stride scan"
+	@echo "  pointer       Pointer chase"
+	@echo "  benchmark     Comparative benchmark"
 	@echo ""
 	@echo "Experiments:"
-	@echo "  make scan          - Run scan workload"
-	@echo "  make vecadd        - Run vector-add workload"
-	@echo "  make stride        - Run stride-scan experiment"
-	@echo "  make pointer       - Run pointer-chase workload"
-	@echo "  make wsweep        - Run working-set-sweep cache measurement"
-	@echo "  make benchmark     - Run full benchmark suite"
+	@echo "  scaling       Dataset scaling"
+	@echo "  strides       Stride testing"
+	@echo "  wsweep        Working-set sweep"
 	@echo ""
 	@echo "Visualization:"
-	@echo "  make plot-scaling  - Plot dataset scaling results"
-	@echo "  make plot-stride   - Plot stride scan results"
+	@echo "  plot-scaling  Dataset scaling plots"
+	@echo "  plot-stride   Stride scan plots"
+	@echo "  plots         Generate all plots"
 
+# =============================================================================
 # Build & Development
+# =============================================================================
+
 build:
-	cargo build
+	$(CARGO) build
 
 release:
-	cargo build --release
+	$(CARGO) build --release
 
 check:
-	cargo check
+	$(CARGO) check
+
+fmt:
+	$(CARGO) fmt
+
+lint:
+	$(CARGO) clippy --all-targets --all-features
 
 test:
-	cargo test
+	$(CARGO) test
 
 clean:
-	cargo clean
+	$(CARGO) clean
 
-dev: check test
+dev: fmt check test
 
-# Run System
+# =============================================================================
+# Runtime
+# =============================================================================
+
 host:
-	cargo run --bin aletheia-host --release
+	$(HOST)
 
 node:
-	cargo run --bin aletheia-node --release
+	$(NODE)
 
-# Experiments
+# =============================================================================
+# Workloads
+# =============================================================================
+
 scan:
-	cargo run --bin aletheia-host --release -- scan
+	$(HOST) scan
 
 vecadd:
-	cargo run --bin aletheia-host --release -- vec-add
+	$(HOST) vec-add
 
 stride:
-	cargo run --bin aletheia-host --release -- stride-scan
+	$(HOST) stride-scan
 
 pointer:
-	cargo run --bin aletheia-host --release -- pointer-chase
-
-wsweep:
-	cargo run --bin aletheia-host --release -- experiment working-set-sweep
+	$(HOST) pointer-chase
 
 benchmark:
-	cargo run --bin aletheia-host --release -- benchmark
+	$(HOST) benchmark
 
+# =============================================================================
+# Experiments
+# =============================================================================
+
+scaling:
+	$(HOST) experiment dataset-scaling
+
+strides:
+	$(HOST) experiment stride-testing
+
+wsweep:
+	$(HOST) experiment working-set-sweep
+
+# =============================================================================
 # Visualization
+# =============================================================================
+
 plot-scaling:
-	python viz/plot_dataset_scaling.py
+	$(PYTHON) viz/plot_dataset_scaling.py
 
 plot-stride:
-	python viz/plot_stride_scan.py
+	$(PYTHON) viz/plot_stride_scan.py
+
+plots: plot-scaling plot-stride
