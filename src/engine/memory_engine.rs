@@ -1,5 +1,5 @@
+pub use super::operations::Operation;
 use crate::OperationStats;
-pub use super::operations::{Operation};
 use std::time::Instant;
 
 pub struct MemoryEngine {
@@ -47,7 +47,7 @@ impl MemoryEngine {
         params: &[u32],
     ) -> ExecutionResult {
         let start = Instant::now();
-        
+
         let buffers: Vec<&[u32]> = buffer_indices
             .iter()
             .filter_map(|&idx| self.get_buffer(idx))
@@ -127,7 +127,7 @@ impl MemoryEngine {
                     let n = buffer.len();
                     let mut result = Vec::with_capacity(iterations);
                     let mut idx = 0usize;
-                    
+
                     for _ in 0..iterations {
                         let val = buffer[idx];
                         result.push(val);
@@ -144,7 +144,7 @@ impl MemoryEngine {
                     let iterations = params[0] as usize;
                     let n = buffer.len();
                     let mut result = Vec::with_capacity(iterations);
-                    
+
                     // Linear iteration through pre-shuffled indices stored in buffer
                     // (no dependency like pointer chase, but random spatial access)
                     for i in 0..iterations {
@@ -183,7 +183,7 @@ impl MemoryEngine {
         params: &[u32],
     ) -> ExecutionResult {
         let start = Instant::now();
-        
+
         let buffers: Vec<&[u32]> = buffer_indices
             .iter()
             .filter_map(|&idx| self.get_buffer(idx))
@@ -264,7 +264,7 @@ impl MemoryEngine {
                     let n = buffer.len();
                     let mut result = Vec::with_capacity(iterations);
                     let mut idx = 0usize;
-                    
+
                     for _ in 0..iterations {
                         let val = buffer[idx];
                         result.push(val);
@@ -281,7 +281,7 @@ impl MemoryEngine {
                     let iterations = params[0] as usize;
                     let n = buffer.len();
                     let mut result = Vec::with_capacity(iterations);
-                    
+
                     // Linear iteration through pre-shuffled indices stored in buffer
                     // (no dependency like pointer chase, but random spatial access)
                     for i in 0..iterations {
@@ -299,7 +299,7 @@ impl MemoryEngine {
         // Derive cycles from elapsed time using estimated CPU frequency (~4 GHz)
         let estimated_cpu_freq_hz = 4_000_000_000.0;
         let cycles = (elapsed.as_secs_f64() * estimated_cpu_freq_hz) as u64;
-        
+
         // Memory engine reduces data movement: only results flow back to CPU
         let data_moved = data.len() as u64 * 4;
         // Memory access is the same since we still need to scan/process
