@@ -35,6 +35,7 @@ def plot_stride_scan(df, output_dir):
     stride_data = stride_data.sort_values('stride')
 
     fig, ax = plt.subplots(figsize=(11, 6.5))
+    ax2 = ax.twinx()
 
     # --- Plot CPU ---
     cpu = stride_data[stride_data['mode'] == 'cpu']
@@ -45,7 +46,7 @@ def plot_stride_scan(df, output_dir):
             marker='o',
             linewidth=2.5,
             markersize=7,
-            label='CPU',
+            label='CPU Runtime',
         )
 
     # --- Plot Memory Engine ---
@@ -57,7 +58,18 @@ def plot_stride_scan(df, output_dir):
             marker='s',
             linewidth=2.5,
             markersize=7,
-            label='Memory Engine',
+            label='Memory Engine Runtime',
+        )
+
+        ax2.plot(
+            mem['stride'],
+            (mem['cache_misses'] / mem['cache_references']) * 100,
+            linestyle='--',
+            marker='^',
+            color='tab:green',
+            linewidth=2,
+            markersize=7,
+            label='Memory Engine Cache Miss Rate',
         )
 
     # --- Log scale (IMPORTANT) ---
@@ -66,8 +78,10 @@ def plot_stride_scan(df, output_dir):
     # --- Labels ---
     ax.set_xlabel('Stride (bytes)', fontsize=12)
     ax.set_ylabel('Runtime (ms)', fontsize=12)
+    ax2.set_ylabel('Cache Miss Rate (%)', fontsize=12)
+    ax2.set_ylim(0, 60)
     ax.set_title(
-        'Stride vs Runtime: Loss of Cache Locality',
+        'Runtime and Cache Miss Rate vs Memory Access Stride',
         fontsize=14,
         pad=12
     )
@@ -95,18 +109,10 @@ def plot_stride_scan(df, output_dir):
         alpha=0.8
     )
 
-    # --- Key insight annotation ---
-    ax.annotate(
-        'Sharp slowdown beyond cache-line size',
-        xy=(64, cpu[cpu['stride'] == 64]['runtime_ms'].values[0]
-            if not cpu.empty else 0),
-        xytext=(150, ax.get_ylim()[1] * 0.6),
-        arrowprops=dict(arrowstyle='->', lw=1.5),
-        fontsize=10
-    )
-
     # --- Legend ---
-    ax.legend(frameon=False)
+    lines1, labels1 = ax.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax.legend(lines1 + lines2, labels1 + labels2, frameon=False)
 
     plt.tight_layout()
 
