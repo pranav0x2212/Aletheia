@@ -51,7 +51,7 @@ NODE := $(CARGO) run --bin aletheia-node --release
 	host node \
 	scan vecadd stride pointer benchmark \
 	scaling strides wsweep \
-	plot-scaling plot-stride plots
+	plot-scaling plot-stride plot-hero plots
 
 help:
 	@echo "Aletheia - Available targets"
@@ -85,6 +85,7 @@ help:
 	@echo "Visualization:"
 	@echo "  plot-scaling  Dataset scaling plots"
 	@echo "  plot-stride   Generate stride scan plots"
+	@echo "  plot-hero    Generate hero plot"
 	@echo "  plots         Generate all plots"
 	@echo ""
 	@echo "Configuration:"
@@ -171,4 +172,7 @@ plot-scaling:
 plot-stride:
 	$(PYTHON) viz/plot_stride_scan.py
 
-plots: plot-scaling plot-stride
+plot-hero:
+	$(PYTHON) viz/plot_hero.py
+
+plots: plot-scaling plot-stride plot-hero
