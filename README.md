@@ -40,7 +40,7 @@ The framework currently includes three experiment suites and one aggregate visua
 The Hero Plot summarizes the behavior of Aletheia's working-set experiments by comparing sequential, random, and pointer-chasing memory access patterns across increasing working-set sizes. Together, these workloads expose how different access patterns interact with the processor's cache hierarchy and memory subsystem.
 
 <p align="center">
-  <img src="results/rpi-results/working_set_hero_plot_v2.png" width="90%">
+  <img src="viz/output/working_set_hero_plot_v2.png" width="90%">
 </p>
 
 Sequential accesses maintain high cache locality and benefit from hardware prefetching, resulting in comparatively stable execution times until the working set exceeds the capacity of successive cache levels. Random accesses reduce spatial locality, while pointer-chasing introduces strict data dependencies that limit memory-level parallelism and expose the full cost of cache misses. The resulting transitions reveal the effects of the underlying cache hierarchy, illustrating how access patterns fundamentally influence memory performance.
